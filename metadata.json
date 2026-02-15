@@ -1,0 +1,7 @@
+{
+  "name": "RoborNET 2026 - Next Generation ISP",
+  "description": "A high-performance, futuristic landing page for a Russian internet service provider featuring 3D animations, smart AI support via Gemini, and a modern responsive design.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}

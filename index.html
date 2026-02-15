@@ -1,0 +1,233 @@
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>РоборНЭТ — Интернет-провайдер нового поколения в Волгограде</title>
+    <meta name="description" content="РоборНЭТ — высокоскоростной интернет и интерактивное ТВ в Волгограде. Подключение квартир и частного сектора. Оптические технологии будущего у вас дома.">
+    <meta name="keywords" content="интернет Волгоград, провайдер РоборНЭТ, подключить интернет в частный дом, безлимитный интернет Волгоград, интерактивное ТВ, RoborNET">
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://robornet.ru/">
+    <meta property="og:title" content="РоборНЭТ — Интернет-провайдер нового поколения">
+    <meta property="og:description" content="Высокоскоростной интернет, 140+ ТВ каналов и умная техподдержка в Волгограде. Подключайтесь к будущему сегодня!">
+    <meta property="og:image" content="https://storage.googleapis.com/uspeshnyy-projects/smit/robotnet.ru/ogimage.jpg">
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://robornet.ru/">
+    <meta property="twitter:title" content="РоборНЭТ — Интернет-провайдер нового поколения">
+    <meta property="twitter:description" content="Высокоскоростной интернет, 140+ ТВ каналов и умная техподдержка в Волгограде.">
+    <meta property="twitter:image" content="https://storage.googleapis.com/uspeshnyy-projects/smit/robotnet.ru/ogimage.jpg">
+
+    <link rel="canonical" href="https://robornet.ru/" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Montserrat:wght@700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- GSAP Scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        heading: ['Montserrat', 'sans-serif'],
+                    },
+                    colors: {
+                        neon: {
+                            cyan: '#00D4FF',
+                            lime: '#2ECC71',
+                            coral: '#FF4757',
+                        }
+                    },
+                    boxShadow: {
+                        'neon-cyan': '0 0 20px rgba(0, 212, 255, 0.3)',
+                        'neon-lime': '0 0 20px rgba(46, 204, 113, 0.3)',
+                        'news-glow': '0 20px 50px -10px rgba(0, 212, 255, 0.45)',
+                    },
+                    animation: {
+                      'in': 'fadeIn 0.5s ease-out forwards',
+                      'zoom-in-95': 'zoomIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards',
+                      'slide-in-from-bottom-6': 'slideBottom 0.6s ease-out forwards',
+                      'slide-in-from-left-10': 'slideLeft 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+                    },
+                    keyframes: {
+                      fadeIn: {
+                        '0%': { opacity: '0' },
+                        '100%': { opacity: '1' },
+                      },
+                      zoomIn: {
+                        '0%': { transform: 'scale(0.95)', opacity: '0' },
+                        '100%': { transform: 'scale(1)', opacity: '1' },
+                      },
+                      slideBottom: {
+                        '0%': { transform: 'translateY(1.5rem)', opacity: '0' },
+                        '100%': { transform: 'translateY(0)', opacity: '1' },
+                      },
+                      slideLeft: {
+                        '0%': { transform: 'translateX(-2.5rem)', opacity: '0' },
+                        '100%': { transform: 'translateX(0)', opacity: '1' },
+                      }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        html { scroll-behavior: smooth; }
+        body { 
+            -webkit-font-smoothing: antialiased; 
+            transition: background-color 0.5s ease, color 0.5s ease;
+        }
+        
+        *, *::before, *::after {
+            transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease, opacity 0.3s ease, transform 0.3s ease;
+        }
+
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { 
+            background: #00D4FF; 
+            border-radius: 10px;
+        }
+        
+        .glass { 
+            backdrop-filter: blur(16px); 
+            -webkit-backdrop-filter: blur(16px); 
+        }
+        
+        .dark .glass { background-color: rgba(15, 23, 42, 0.7); }
+        .light .glass { background-color: rgba(255, 255, 255, 0.7); }
+
+        .text-glow { text-shadow: 0 0 10px rgba(0, 212, 255, 0.5); }
+
+        @keyframes click-glow {
+          0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(0, 212, 255, 0); }
+          30% { transform: scale(1.08); box-shadow: 0 0 25px rgba(0, 212, 255, 0.6); }
+          100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(0, 212, 255, 0); }
+        }
+
+        .animate-click-glow:active {
+          animation: click-glow 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        /* News Card Improvements */
+        .news-item-card {
+            transition: all 0.5s cubic-bezier(0.165, 0.84, 0.44, 1);
+            position: relative;
+            overflow: hidden;
+            will-change: transform, box-shadow;
+        }
+        .news-item-card:hover {
+            transform: translateY(-12px) scale(1.03);
+            box-shadow: 0 25px 60px -15px rgba(0, 212, 255, 0.4);
+            border-color: rgba(0, 212, 255, 0.5) !important;
+        }
+        
+        .news-item-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -150%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.05), transparent);
+            transition: 0.6s;
+            pointer-events: none;
+            z-index: 10;
+        }
+        .news-item-card:hover::before {
+            left: 150%;
+        }
+
+        .read-more-btn {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: all 0.3s ease;
+        }
+        
+        .read-more-btn::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 0;
+            width: 0;
+            height: 1.5px;
+            background: #00D4FF;
+            transition: width 0.3s ease;
+            box-shadow: 0 0 8px rgba(0, 212, 255, 0.8);
+        }
+        
+        .news-item-card:hover .read-more-btn::after {
+            width: 100%;
+        }
+        
+        .news-item-card:hover .read-more-btn {
+            color: #00D4FF !important;
+            text-shadow: 0 0 10px rgba(0, 212, 255, 0.3);
+        }
+        
+        .news-item-card:hover .read-more-arrow {
+            transform: translateX(8px);
+            color: #00D4FF !important;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background-color: #00D4FF;
+          border-radius: 10px;
+        }
+
+        /* TV Section Structured Diagonal Row Pattern */
+        .tv-pattern {
+            background-image: 
+                url("https://storage.googleapis.com/uspeshnyy-projects/smit/robotnet.ru/TV.svg"),
+                url("https://storage.googleapis.com/uspeshnyy-projects/smit/robotnet.ru/remote_control.svg"),
+                url("https://storage.googleapis.com/uspeshnyy-projects/smit/robotnet.ru/play.svg"),
+                url("https://storage.googleapis.com/uspeshnyy-projects/smit/robotnet.ru/online.svg"),
+                url("https://storage.googleapis.com/uspeshnyy-projects/smit/robotnet.ru/audio.svg");
+            /* Force height 32px for all, width auto */
+            background-size: auto 32px, auto 32px, auto 32px, auto 32px, auto 32px;
+            background-repeat: repeat;
+            /* Positioning in a diagonal staggered row within a 500px tile */
+            background-position: 
+                0px 0px, 
+                100px 100px, 
+                200px 200px, 
+                300px 300px, 
+                400px 400px;
+            filter: brightness(0) invert(1) opacity(0.04);
+            animation: tv-bg-move 80s linear infinite;
+        }
+
+        @keyframes tv-bg-move {
+            from { background-position: 0 0, 100px 100px, 200px 200px, 300px 300px, 400px 400px; }
+            to { background-position: 1000px 1000px, 1100px 1100px, 1200px 1200px, 1300px 1300px, 1400px 1400px; }
+        }
+    </style>
+<script type="importmap">
+{
+  "imports": {
+    "@google/genai": "https://esm.sh/@google/genai@^1.41.0",
+    "three": "https://esm.sh/three@^0.182.0",
+    "react/": "https://esm.sh/react@^19.2.4/",
+    "react": "https://esm.sh/react@^19.2.4",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.4/"
+  }
+}
+</script>
+</head>
+<body class="bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 overflow-x-hidden">
+    <div id="root"></div>
+</body>
+</html>
