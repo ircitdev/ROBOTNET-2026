@@ -5,5 +5,5 @@ export const PROMO_MODAL_DATA = {
   description: 'Подключитесь до конца недели и получите месяц интернета на максимальной скорости в подарок! Наши специалисты помогут с выбором.',
   primaryButton: 'Узнать подробнее',
   secondaryButton: 'Спросить ассистента',
-  delay: 10000 // 10 seconds
+  delay: 15000 // 15 seconds
 };

@@ -14,26 +14,25 @@ import { CONTACTS } from './constants/contacts';
 
 const FAQItem: React.FC<{ question: string; answer: string; isOpen: boolean; onClick: () => void }> = ({ question, answer, isOpen, onClick }) => {
   return (
-    <div className={`group bg-white dark:bg-slate-900 rounded-3xl border transition-all duration-500 overflow-hidden ${
-      isOpen ? 'border-neon-cyan shadow-[0_0_30px_rgba(0,212,255,0.15)]' : 'border-slate-200 dark:border-slate-800 hover:border-neon-cyan/40'
+    <div className={`group bg-white/5 dark:bg-slate-900/40 backdrop-blur-md rounded-2xl border transition-all duration-500 overflow-hidden mb-4 ${
+      isOpen ? 'border-neon-cyan/50 bg-slate-100/60 dark:bg-slate-900/60 shadow-[0_0_30px_rgba(0,212,255,0.1)]' : 'border-slate-200 dark:border-white/5 hover:border-neon-cyan/20'
     }`}>
       <button 
         onClick={onClick}
-        className="w-full text-left p-7 flex justify-between items-center focus:outline-none"
-        aria-expanded={isOpen}
+        className="w-full text-left p-6 flex justify-between items-center focus:outline-none"
       >
-        <span className={`text-lg font-heading font-bold transition-colors duration-300 ${isOpen ? 'text-neon-cyan' : 'text-slate-900 dark:text-white'}`}>
+        <span className={`text-base md:text-lg font-bold transition-colors duration-300 ${isOpen ? 'text-neon-cyan' : 'text-slate-700 dark:text-white'}`}>
           {question}
         </span>
-        <div className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all duration-500 ${isOpen ? 'bg-neon-cyan text-slate-900 rotate-180' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all duration-500 ${isOpen ? 'bg-neon-cyan/10 text-neon-cyan rotate-180' : 'bg-slate-200 dark:bg-slate-800 text-slate-500'}`}>
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
           </svg>
         </div>
       </button>
       <div className={`grid transition-all duration-500 ease-in-out ${isOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
         <div className="overflow-hidden">
-          <div className="p-7 pt-0 text-slate-600 dark:text-slate-400 text-base leading-relaxed border-t border-slate-50 dark:border-slate-800/50 mt-0">
+          <div className="p-6 pt-0 text-slate-500 dark:text-slate-400 text-sm md:text-base leading-relaxed border-t border-slate-100 dark:border-white/5 mt-0">
             {answer}
           </div>
         </div>
@@ -46,43 +45,59 @@ const App: React.FC = () => {
   const [isDark, setIsDark] = useState(true);
   const [scrolled, setScrolled] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   
-  const [visibleNewsCount, setVisibleNewsCount] = useState(3);
   const [newsModalActive, setNewsModalActive] = useState(false);
   const [selectedNews, setSelectedNews] = useState<NewsItem | null>(null);
+  const [visibleNewsCount, setVisibleNewsCount] = useState(3);
 
   const [isChannelsModalOpen, setIsChannelsModalOpen] = useState(false);
   const [selectedChannelCategory, setSelectedChannelCategory] = useState(0);
   const [openFAQIndex, setOpenFAQIndex] = useState<number | null>(null);
 
   const [showPromoModal, setShowPromoModal] = useState(false);
-  const [showCookieBanner, setShowCookieBanner] = useState(false);
-
   const containerRef = useRef<HTMLDivElement>(null);
+  const heroTextRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (isDark) {
+      document.documentElement.classList.add('dark');
+      document.documentElement.classList.remove('light');
+    } else {
+      document.documentElement.classList.remove('dark');
+      document.documentElement.classList.add('light');
+    }
+  }, [isDark]);
+
+  useEffect(() => {
+    if (isLoading) return;
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!heroTextRef.current || window.innerWidth < 768) return;
+      const x = (window.innerWidth / 2 - e.clientX) / 50;
+      const y = (window.innerHeight / 2 - e.clientY) / 50;
+      heroTextRef.current.style.transform = `translate(${x}px, ${y}px)`;
+    };
+    window.addEventListener('mousemove', handleMouseMove);
+    return () => window.removeEventListener('mousemove', handleMouseMove);
+  }, [isLoading]);
 
   useEffect(() => {
     if (!isLoading) {
-      const promoTimer = setTimeout(() => setShowPromoModal(true), PROMO_MODAL_DATA.delay);
-      const cookieTimer = setTimeout(() => setShowCookieBanner(true), 30000);
-      return () => {
-        clearTimeout(promoTimer);
-        clearTimeout(cookieTimer);
-      };
+      const PROMO_KEY = 'robornet_promo_shown';
+      const lastShown = localStorage.getItem(PROMO_KEY);
+      const now = Date.now();
+      const oneDayMs = 24 * 60 * 60 * 1000;
+      if (lastShown && now - parseInt(lastShown, 10) < oneDayMs) return;
+      const promoTimer = setTimeout(() => {
+        setShowPromoModal(true);
+        localStorage.setItem(PROMO_KEY, String(Date.now()));
+      }, PROMO_MODAL_DATA.delay);
+      return () => clearTimeout(promoTimer);
     }
   }, [isLoading]);
 
-  // Auto-hide cookie banner after 5 seconds
-  useEffect(() => {
-    if (showCookieBanner) {
-      const hideTimer = setTimeout(() => setShowCookieBanner(false), 5000);
-      return () => clearTimeout(hideTimer);
-    }
-  }, [showCookieBanner]);
-
-  // GSAP Animations
   useEffect(() => {
     if (isLoading) return;
-
     const gsap = (window as any).gsap;
     const ScrollTrigger = (window as any).ScrollTrigger;
     if (!gsap || !ScrollTrigger) return;
@@ -90,39 +105,13 @@ const App: React.FC = () => {
 
     const ctx = gsap.context(() => {
       gsap.set(".gsap-reveal", { opacity: 0, y: 30 });
-
-      const heroTl = gsap.timeline({ defaults: { ease: "power4.out", duration: 1.2 } });
-      heroTl
-        .to(".hero-badge", { y: 0, opacity: 1, duration: 0.8 }, 0.5)
-        .to(".hero-title", { y: 0, opacity: 1, stagger: 0.2 }, "-=0.6")
-        .to(".hero-p", { y: 0, opacity: 1 }, "-=0.8")
-        .to(".hero-btns", { y: 0, opacity: 1, stagger: 0.15 }, "-=1");
-
-      const revealOnScroll = (selector: string, start: string = "top 85%") => {
-        gsap.utils.toArray(selector).forEach((el: any) => {
-          gsap.to(el, {
-            scrollTrigger: { trigger: el, start },
-            y: 0, opacity: 1, duration: 1, ease: "power3.out",
-            overwrite: "auto"
-          });
+      gsap.utils.toArray(".gsap-reveal").forEach((el: any) => {
+        gsap.to(el, {
+          scrollTrigger: { trigger: el, start: "top 85%" },
+          y: 0, opacity: 1, duration: 1, ease: "power3.out"
         });
-      };
-
-      revealOnScroll(".section-heading");
-      revealOnScroll(".tariff-card", "top 70%");
-      revealOnScroll(".about-text", "top 70%");
-      revealOnScroll(".news-card", "top 70%");
-      revealOnScroll(".faq-gsap", "top 75%");
-      revealOnScroll(".help-gsap", "top 80%");
-      revealOnScroll(".office-info-gsap", "top 75%");
-      revealOnScroll(".legal-info-gsap", "top 75%");
-
-      gsap.to(".about-visual", {
-        scrollTrigger: { trigger: "#about", start: "top 60%" },
-        scale: 1, opacity: 1, duration: 1.5, ease: "elastic.out(1, 0.75)"
       });
     }, containerRef);
-
     return () => ctx.revert();
   }, [isLoading]);
 
@@ -133,17 +122,9 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (isDark) document.documentElement.classList.add('dark');
-    else document.documentElement.classList.remove('dark');
-  }, [isDark]);
-
-  useEffect(() => {
-    if (newsModalActive || isChannelsModalOpen || isLoading || showPromoModal) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = 'auto';
-    }
-  }, [newsModalActive, isChannelsModalOpen, isLoading, showPromoModal]);
+    const isLocked = newsModalActive || isChannelsModalOpen || isLoading || showPromoModal || isMobileMenuOpen;
+    document.body.style.overflow = isLocked ? 'hidden' : 'auto';
+  }, [newsModalActive, isChannelsModalOpen, isLoading, showPromoModal, isMobileMenuOpen]);
 
   const openNews = (item: NewsItem) => {
     setSelectedNews(item);
@@ -155,152 +136,227 @@ const App: React.FC = () => {
     setTimeout(() => setSelectedNews(null), 400);
   };
 
-  const loadMoreNews = () => setVisibleNewsCount(prev => prev + 3);
-  const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
+  const scrollToSection = (id: string) => {
+    setIsMobileMenuOpen(false);
+    const el = document.getElementById(id);
+    if (el) {
+      window.scrollTo({ top: el.offsetTop - 80, behavior: 'smooth' });
+    }
+  };
+
+  const ThemeToggle = () => (
+    <button 
+      onClick={() => setIsDark(!isDark)}
+      className="w-10 h-10 rounded-full flex items-center justify-center bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-slate-600 dark:text-neon-cyan hover:scale-110 transition-all shadow-lg focus:outline-none"
+      title={isDark ? "Светлая тема" : "Темная тема"}
+    >
+      {isDark ? (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+      ) : (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
+      )}
+    </button>
+  );
 
   return (
-    <div ref={containerRef}>
+    <div ref={containerRef} className="bg-white dark:bg-slate-950 transition-colors duration-500 selection:bg-neon-cyan selection:text-slate-900">
       {isLoading && <Preloader onComplete={() => setIsLoading(false)} />}
       
       <div className={`min-h-screen flex flex-col font-sans transition-opacity duration-1000 ${isLoading ? 'opacity-0' : 'opacity-100'}`}>
         {/* Header */}
-        <header className={`fixed top-0 w-full z-[100] transition-all duration-300 ${scrolled ? 'bg-white/90 dark:bg-slate-950/90 glass py-3 border-b border-neon-cyan/10' : 'bg-transparent py-5 border-b border-transparent'}`}>
+        <header className={`fixed top-0 w-full z-[100] transition-all duration-500 ${scrolled ? 'bg-white/80 dark:bg-slate-950/90 backdrop-blur-xl py-3 border-b border-slate-200 dark:border-white/5' : 'bg-transparent py-5 border-b border-transparent'}`}>
           <div className="container mx-auto px-6 flex justify-between items-center">
-            <a href="#" className="flex items-center gap-2 group" aria-label="РоборНЭТ Главная">
-              <svg className="w-8 h-8 text-neon-cyan group-hover:drop-shadow-[0_0_8px_#00D4FF]" viewBox="0 0 640 512" fill="currentColor" role="img" aria-hidden="true">
+            <a href="#" className="flex items-center gap-2 group">
+              <svg className="w-8 h-8 text-neon-cyan group-hover:drop-shadow-[0_0_12px_#00D4FF] transition-all" viewBox="0 0 640 512" fill="currentColor">
                 <path d="M634.91 154.88C457.74-8.99 182.19-8.93 5.09 154.88c-6.66 6.16-6.79 16.59-.35 22.98l34.24 33.97c6.14 6.1 16.28 6.25 22.48.51 126.96-117.63 318.66-118.49 446.71 0 6.21 5.74 16.34 5.59 22.48-.51l34.24-33.97c6.44-6.39 6.31-16.82-.35-22.98zM320 352c-35.35 0-64 28.65-64 64s28.65 64 64 64 64-28.65 64-64-28.65-64-64-64zm202.67-83.59c-111.53-103.35-293.78-103.37-405.33 0-6.26 5.8-6.43 15.91-.52 21.79l34.32 34.12c5.82 5.8 15.35 5.82 21.13.02 73.08-67.65 192.47-67.71 265.81 0 5.78 5.79 15.31 5.78 21.13-.02l34.32-34.12c5.78-5.77 5.74-15.99-.52-21.79z"/>
               </svg>
-              <span className="text-2xl font-heading font-extrabold tracking-tighter dark:text-white">Robor<span className="text-neon-cyan">NET</span></span>
+              <span className="text-2xl font-heading font-extrabold tracking-tighter text-slate-900 dark:text-white">Robor<span className="text-neon-cyan">NET</span></span>
             </a>
 
-            <nav className="hidden lg:flex items-center gap-8 font-medium uppercase text-[10px] tracking-widest" aria-label="Основная навигация">
-              <a href="#about" className="hover:text-neon-cyan transition-colors dark:text-slate-300">О сети</a>
-              <a href="#tariffs" className="hover:text-neon-cyan transition-colors dark:text-slate-300">Тарифы</a>
-              <a href="#tv" className="hover:text-neon-cyan transition-colors dark:text-slate-300">ТВ</a>
-              <a href="#news" className="hover:text-neon-cyan transition-colors dark:text-slate-300">Новости</a>
-              <a href="#faq" className="hover:text-neon-cyan transition-colors dark:text-slate-300">FAQ</a>
-              <button onClick={() => toggleGeminiChat()} className="text-neon-cyan font-bold hover:scale-105 transition-transform" aria-label="Открыть ИИ Помощника">AI Помощь</button>
-              <button onClick={() => setIsDark(!isDark)} className="p-2.5 bg-slate-100 dark:bg-slate-800 rounded-2xl transition-all active:scale-90" aria-label="Переключить тему оформления">
-                {isDark ? '☀️' : '🌙'}
-              </button>
-              <a href="http://lk.robornet.ru/" className="bg-neon-cyan text-slate-900 px-7 py-2.5 rounded-full font-bold shadow-neon-cyan transition-all hover:scale-105">ЛК</a>
+            <nav className="hidden lg:flex items-center gap-8 font-medium uppercase text-[10px] tracking-widest">
+              {['about-network', 'tariffs', 'tv', 'news', 'documents'].map(id => (
+                <a key={id} href={`#${id}`} onClick={(e) => {e.preventDefault(); scrollToSection(id);}} className="text-slate-500 dark:text-slate-400 hover:text-neon-cyan dark:hover:text-white transition-colors">
+                  {id === 'about-network' ? 'О сети' : id === 'tariffs' ? 'Тарифы' : id === 'tv' ? 'ТВ' : id === 'news' ? 'Новости' : 'Документы'}
+                </a>
+              ))}
+              
+              <div className="flex items-center gap-4 ml-4">
+                <ThemeToggle />
+                <button onClick={() => toggleGeminiChat()} className="text-neon-cyan font-bold hover:scale-105 transition-transform flex items-center gap-1.5 px-3 py-1 bg-neon-cyan/5 rounded-lg">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-neon-cyan opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-neon-cyan"></span>
+                  </span>
+                  AI ПОМОЩЬ
+                </button>
+                <a href="http://lk.robornet.ru/" className="bg-neon-cyan text-slate-900 px-6 py-2.5 rounded-full font-bold shadow-neon-cyan hover:scale-105 active:scale-95 transition-all text-[11px] tracking-wider">ЛИЧНЫЙ КАБИНЕТ</a>
+              </div>
             </nav>
+
+            {/* Mobile Header Buttons */}
+            <div className="flex items-center gap-3 lg:hidden">
+              <ThemeToggle />
+              <button onClick={() => setIsMobileMenuOpen(true)} className="text-slate-900 dark:text-white p-2">
+                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 6h16M4 12h16M4 18h16" /></svg>
+              </button>
+            </div>
           </div>
         </header>
 
-        {/* Hero Section */}
-        <section className="relative h-screen flex items-center overflow-hidden" aria-labelledby="hero-title">
+        {/* Mobile Menu Overlay */}
+        <div className={`fixed inset-0 z-[1000] bg-slate-950/95 backdrop-blur-2xl transition-all duration-500 lg:hidden ${isMobileMenuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
+          <div className="flex flex-col h-full p-8">
+            <div className="flex justify-between items-center mb-12">
+               <span className="text-2xl font-heading font-extrabold tracking-tighter text-white">Robor<span className="text-neon-cyan">NET</span></span>
+               <button onClick={() => setIsMobileMenuOpen(false)} className="w-12 h-12 flex items-center justify-center bg-slate-900 rounded-full text-white text-3xl">&times;</button>
+            </div>
+            <nav className="flex flex-col gap-6">
+              {[
+                { id: 'about-network', label: 'О сети' },
+                { id: 'tariffs', label: 'Тарифы' },
+                { id: 'tv', label: 'Телевидение' },
+                { id: 'news', label: 'Новости' },
+                { id: 'documents', label: 'Документы' },
+                { id: 'faq', label: 'FAQ' }
+              ].map(item => (
+                <a 
+                  key={item.id} 
+                  href={`#${item.id}`} 
+                  onClick={(e) => { e.preventDefault(); scrollToSection(item.id); }}
+                  className="text-3xl font-heading font-extrabold text-white hover:text-neon-cyan transition-colors"
+                >
+                  {item.label}
+                </a>
+              ))}
+              <div className="h-px bg-white/10 my-4" />
+              <button 
+                onClick={() => { setIsMobileMenuOpen(false); toggleGeminiChat(); }}
+                className="text-neon-cyan text-xl font-bold flex items-center gap-3"
+              >
+                <div className="w-8 h-8 bg-neon-cyan/10 rounded-full flex items-center justify-center">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                </div>
+                AI Ассистент
+              </button>
+              <a href="http://lk.robornet.ru/" className="bg-neon-cyan text-slate-900 p-5 rounded-2xl font-heading font-extrabold text-center uppercase tracking-widest mt-4">Личный кабинет</a>
+            </nav>
+            <div className="mt-auto pt-8 border-t border-white/5 space-y-4">
+              <a href={`tel:${CONTACTS.phoneShort}`} className="text-xl font-heading font-bold text-white block">{CONTACTS.phoneShort}</a>
+              <p className="text-slate-500 text-sm">{CONTACTS.address}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Hero */}
+        <section id="hero" className="relative h-[100vh] flex items-center overflow-hidden">
           <ThreeHero />
-          <div className="absolute inset-0 bg-gradient-to-t from-slate-50 dark:from-slate-950 via-transparent to-transparent pointer-events-none" />
+          <div className="absolute inset-0 bg-gradient-to-t from-white dark:from-slate-950 via-transparent pointer-events-none" />
           <div className="container mx-auto px-6 relative z-10">
-            <div className="max-w-4xl">
-              <div className="hero-badge gsap-reveal">
-                <span className="inline-block px-4 py-1.5 rounded-full bg-neon-cyan/15 text-neon-cyan text-[10px] font-bold uppercase tracking-[0.2em] mb-8 border border-neon-cyan/40 backdrop-blur-sm">Инновации в каждом бите</span>
+            <div ref={heroTextRef} className="max-w-4xl transition-transform duration-100 ease-out">
+              <h1 className="text-5xl md:text-9xl font-heading font-extrabold leading-[0.9] mb-10 text-slate-900 dark:text-white drop-shadow-2xl">Интернет <br/> <span className="text-transparent bg-clip-text bg-gradient-to-r from-neon-cyan via-blue-500 dark:via-white to-neon-cyan">будущего</span></h1>
+              <p className="text-xl md:text-2xl text-slate-600 dark:text-slate-400 mb-12 max-w-2xl leading-relaxed font-medium">Забудьте о задержках. Погрузитесь в мир контента на максимальной скорости с РоборНЭТ.</p>
+              <button onClick={() => scrollToSection('tariffs')} className="bg-neon-cyan dark:bg-neon-lime text-white dark:text-slate-900 px-10 py-5 rounded-2xl font-bold text-lg shadow-xl hover:scale-105 transition-all active:scale-95">Выбрать тариф</button>
+            </div>
+          </div>
+        </section>
+
+        {/* About Network Section */}
+        <section id="about-network" className="py-32 bg-white dark:bg-slate-950 scroll-mt-20">
+          <div className="container mx-auto px-6">
+            <div className="flex flex-col lg:flex-row items-center gap-16">
+              <div className="lg:w-3/5 space-y-10 gsap-reveal">
+                <div>
+                  <span className="text-neon-cyan text-xs font-bold uppercase tracking-[0.3em] mb-4 block">Технологическое превосходство</span>
+                  <h2 className="text-4xl md:text-7xl font-heading font-extrabold text-slate-900 dark:text-white mb-8 tracking-tight">О сети RoborNET</h2>
+                  <p className="text-slate-600 dark:text-slate-400 text-lg md:text-xl leading-relaxed max-w-2xl">Мы построили не просто сеть, а цифровую экосистему. Собственная магистральная инфраструктура в Волгограде позволяет нам предоставлять услуги без посредников.</p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
+                  {[
+                    { title: "FTTB Архитектура", desc: "Оптика в каждый дом" },
+                    { title: "Локальные ресурсы", desc: "Минимальный пинг" },
+                    { title: "Smart Support", desc: "Умная техподдержка" },
+                    { title: "IPv6 Ready", desc: "Будущее сегодня" }
+                  ].map((feat, i) => (
+                    <div key={i} className="flex items-center gap-5 group">
+                      <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-white/10 flex items-center justify-center text-neon-cyan group-hover:border-neon-cyan group-hover:bg-neon-cyan/10 transition-all duration-500 shadow-lg">
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                      </div>
+                      <span className="text-slate-800 dark:text-white text-lg font-bold tracking-wide">{feat.title}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
-              <h1 id="hero-title" className="hero-title gsap-reveal text-6xl md:text-9xl font-heading font-extrabold leading-[0.9] mb-10 dark:text-white">Интернет <br/> <span className="text-transparent bg-clip-text bg-gradient-to-r from-neon-cyan via-white to-neon-lime">будущего</span></h1>
-              <p className="hero-p gsap-reveal text-xl md:text-2xl text-slate-600 dark:text-slate-400 mb-12 max-w-2xl leading-relaxed">Забудьте о задержках. Погрузитесь в мир контента на максимальной скорости с РоборНЭТ в Волгограде.</p>
-              <div className="hero-btns gsap-reveal flex flex-wrap gap-5">
-                <a href="#tariffs" className="bg-neon-lime text-slate-900 px-10 py-5 rounded-2xl font-bold text-lg hover:shadow-[0_0_30px_rgba(46,204,113,0.4)] transition-all hover:translate-y-[-4px] animate-click-glow">Выбрать тариф</a>
-                <a href="#about" className="px-10 py-5 rounded-2xl font-bold text-lg border border-slate-300 dark:border-slate-700 dark:text-white bg-white/5 backdrop-blur-md hover:bg-slate-100 dark:hover:bg-slate-800 transition-all hover:translate-y-[-4px]">О технологии</a>
+
+              <div className="lg:w-2/5 w-full flex justify-center lg:justify-end gsap-reveal">
+                <div className="relative w-full max-w-md h-44 md:h-52 rounded-[4rem] bg-slate-50 dark:bg-slate-900/60 backdrop-blur-xl border border-slate-200 dark:border-white/5 flex flex-col items-center justify-center group overflow-hidden shadow-2xl transition-all duration-700 hover:border-neon-cyan/30">
+                   <div className="absolute inset-0 bg-gradient-to-br from-neon-cyan/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                   <span className="text-slate-400 dark:text-slate-500 text-[11px] font-bold uppercase tracking-[0.4em] mb-3">Статус сети</span>
+                   <div className="flex items-center gap-5">
+                      <div className="w-4 h-4 rounded-full bg-green-500 animate-pulse shadow-[0_0_20px_#2ECC71]" />
+                      <span className="text-5xl md:text-6xl font-heading font-extrabold text-green-500 drop-shadow-[0_0_25px_rgba(46,204,113,0.5)] tracking-tighter">Online</span>
+                   </div>
+                </div>
               </div>
             </div>
           </div>
         </section>
 
-        {/* Tariffs Section */}
-        <section id="tariffs" className="py-32 bg-slate-50 dark:bg-slate-950" aria-labelledby="tariffs-title">
+        {/* Tariffs */}
+        <section id="tariffs" className="py-24 bg-slate-50 dark:bg-slate-950 scroll-mt-20">
           <div className="container mx-auto px-6">
-            <div className="section-heading text-center max-w-2xl mx-auto mb-20">
-              <span className="text-neon-cyan font-bold uppercase tracking-[0.2em] text-xs mb-4 block">Доступные решения</span>
-              <h2 id="tariffs-title" className="text-4xl md:text-5xl font-heading font-extrabold mb-6 dark:text-white">Тарифные планы интернет-провайдера</h2>
-              <p className="text-slate-500 dark:text-slate-400 text-lg">Прозрачные условия и максимальная производительность для каждого абонента.</p>
-            </div>
+            <h2 className="text-4xl md:text-6xl font-heading font-extrabold mb-16 text-slate-900 dark:text-white text-center">Тарифные планы</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
               {TARIFFS.map((t) => (
-                <article key={t.id} className={`tariff-card gsap-reveal group p-8 rounded-[2rem] border bg-white dark:bg-[#111827] flex flex-col transition-all duration-500 hover:translate-y-[-10px] ${t.isPopular ? 'border-neon-cyan shadow-[0_0_30px_rgba(0,212,255,0.15)] ring-2 ring-neon-cyan/20' : 'border-slate-200 dark:border-slate-800'}`}>
-                  <div className="flex-1">
-                    <div className="flex justify-between items-start mb-4">
-                      <h3 className="text-2xl font-heading font-bold dark:text-white">{t.name}</h3>
-                      {t.isPopular && <span className="bg-neon-cyan text-slate-900 text-[9px] font-extrabold px-3 py-1 rounded-sm uppercase tracking-widest">хит продаж</span>}
-                    </div>
-                    <div className="mb-8">
-                      <span className="text-5xl font-heading font-extrabold dark:text-white tracking-tighter">{t.price}</span> 
-                      <span className="text-slate-400 ml-1.5 text-lg font-medium">₽/мес</span>
-                    </div>
-                    <div className="space-y-4 mb-8 text-sm font-bold text-slate-500 dark:text-slate-300">
-                      {t.isWireless && <div className="flex items-center gap-4">Беспроводное подключение</div>}
-                      <div className="flex items-center gap-4">Скорость {t.speed} Мбит/с</div>
-                      {t.nightSpeed && <div className="flex items-center gap-4">Ночью: {t.nightSpeed} Мбит/с</div>}
-                      {t.tvChannels && <div className="flex items-center gap-4">ТВ: {t.tvChannels} каналов</div>}
-                    </div>
-                  </div>
-                  <button 
-                    onClick={() => toggleGeminiChat(`Привет! Я выбрал тариф "${t.name}"`)}
-                    className={`w-full py-4 rounded-xl font-heading font-extrabold text-xs uppercase tracking-widest transition-all ${t.isPopular ? 'bg-gradient-to-r from-[#2ECC71] to-[#27AE60] text-white hover:scale-[1.02]' : 'bg-[#1F2937] text-[#9CA3AF] hover:bg-slate-700'}`}>
-                    {t.buttonText || 'ПОДКЛЮЧИТЬ'}
-                  </button>
+                <article key={t.id} className={`tariff-card gsap-reveal group p-8 rounded-[2.5rem] border bg-white dark:bg-slate-900/40 backdrop-blur-md flex flex-col transition-all duration-500 hover:translate-y-[-10px] ${t.isPopular ? 'border-neon-cyan shadow-xl ring-1 ring-neon-cyan/30' : 'border-slate-200 dark:border-white/5'}`}>
+                   <h3 className="text-2xl font-bold mb-4 text-slate-800 dark:text-white">{t.name}</h3>
+                   <div className="mb-8"><span className="text-5xl font-extrabold text-slate-900 dark:text-white">{t.price}</span><span className="text-slate-400 ml-2 font-bold">₽/мес</span></div>
+                   <div className="mb-8 space-y-3 text-sm text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">
+                      <p className="flex justify-between border-b border-slate-100 dark:border-white/5 pb-1"><span>Скорость</span> <span className="text-slate-900 dark:text-white">{t.speed} Мбит/с</span></p>
+                      <p className="flex justify-between"><span>ТВ</span> <span className="text-slate-900 dark:text-white">{t.tvChannels || '—'}</span></p>
+                   </div>
+                   <button onClick={() => toggleGeminiChat(`Хочу подключить тариф ${t.name}`)} className={`w-full py-4 rounded-2xl font-bold text-xs uppercase tracking-widest transition-all ${t.isPopular ? 'bg-neon-cyan text-white dark:text-slate-900 shadow-neon-cyan' : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-white hover:bg-slate-300 dark:hover:bg-slate-700'}`}>ПОДКЛЮЧИТЬ</button>
                 </article>
               ))}
             </div>
           </div>
         </section>
 
-        {/* About Section */}
-        <section id="about" className="py-32 bg-white dark:bg-slate-900 relative overflow-hidden" aria-labelledby="about-title">
-          <div className="container mx-auto px-6 relative z-10">
-             <div className="grid grid-cols-1 lg:grid-cols-2 gap-20 items-center">
-                <div className="about-text gsap-reveal">
-                  <span className="text-neon-cyan font-bold uppercase tracking-[0.2em] text-xs mb-4 block">Технологическое превосходство</span>
-                  <h2 id="about-title" className="text-4xl md:text-6xl font-heading font-extrabold mb-8 dark:text-white leading-tight">О сети RoborNET</h2>
-                  <p className="text-slate-600 dark:text-slate-400 mb-10 text-xl leading-relaxed">Мы построили не просто сеть, а цифровую экосистему. Собственная магистральная инфраструктура в Волгограде позволяет нам предоставлять услуги без посредников.</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
-                    {['FTTB Архитектура', 'Локальные ресурсы', 'Smart Support', 'IPv6 Ready'].map((feat, i) => (
-                      <div key={i} className="flex gap-5 items-center group">
-                        <div className="w-12 h-12 rounded-2xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center shrink-0 border border-slate-100 dark:border-slate-700 group-hover:border-neon-cyan transition-all">
-                          <svg className="w-6 h-6 text-neon-cyan" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                        </div>
-                        <h3 className="font-heading font-bold dark:text-white text-lg">{feat}</h3>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <div className="about-visual gsap-reveal relative">
-                  <div className="absolute -inset-10 bg-neon-cyan/10 blur-[120px] rounded-full animate-pulse" />
-                  <div className="relative bg-white dark:bg-slate-800/40 backdrop-blur-xl p-10 rounded-[3.5rem] border border-slate-200 dark:border-slate-700 shadow-2xl">
-                    <div className="text-center">
-                      <div className="text-[10px] uppercase font-bold text-slate-400 tracking-widest mb-1">Статус сети</div>
-                      <div className="text-3xl font-heading font-extrabold text-neon-lime">Online</div>
-                    </div>
-                  </div>
-                </div>
-             </div>
-          </div>
-        </section>
-
         {/* TV Section */}
-        <section id="tv" className="py-32 bg-slate-50 dark:bg-slate-950 relative overflow-hidden" aria-labelledby="tv-title">
-          <div className="absolute inset-0 tv-pattern opacity-60 pointer-events-none" />
+        <section id="tv" className="py-32 bg-white dark:bg-slate-950 scroll-mt-20 overflow-hidden relative">
+          <div className="absolute inset-0 tv-pattern pointer-events-none opacity-40" />
           <div className="container mx-auto px-6 relative z-10">
-            <div className="flex flex-col lg:flex-row gap-20 items-center mb-16">
-              <div className="section-heading lg:w-2/5">
-                <span className="text-neon-cyan font-bold uppercase tracking-[0.2em] text-xs mb-4 block">Интерактивный контент</span>
-                <h2 id="tv-title" className="text-4xl md:text-6xl font-heading font-extrabold mb-8 dark:text-white">Больше чем ТВ</h2>
-                <p className="text-slate-600 dark:text-slate-400 mb-10 text-xl leading-relaxed">Погрузитесь в атмосферу кинотеатра у себя дома. Наше ТВ — это свобода выбора: архив за 7 дней, пауза эфира и одновременный просмотр на 5 устройствах.</p>
-                <div className="flex flex-col gap-5">
-                   {['5 Устройств', '4K & HDR', '7 Дней записи'].map((item, i) => (
-                     <div key={i} className="flex items-center justify-between p-5 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-2xl border border-slate-100 dark:border-slate-700 font-bold dark:text-white">
-                        <span>{item}</span>
-                        <svg className="w-5 h-5 text-neon-cyan" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" /></svg>
-                     </div>
-                   ))}
+            <div className="flex flex-col lg:flex-row gap-20 items-center">
+              <div className="lg:w-1/3 space-y-10 gsap-reveal">
+                <div>
+                  <span className="text-neon-cyan text-xs font-bold uppercase tracking-[0.3em] mb-4 block">Интерактивный контент</span>
+                  <h2 className="text-4xl md:text-7xl font-heading font-extrabold text-slate-900 dark:text-white mb-6 leading-tight tracking-tight">Больше чем ТВ</h2>
+                  <p className="text-slate-600 dark:text-slate-400 text-lg md:text-xl leading-relaxed">Погрузитесь в атмосферу кинотеатра у себя дома. Наше ТВ — это свобода выбора: архив за 7 дней, пауза эфира и одновременный просмотр на 5 устройствах.</p>
+                </div>
+                
+                <div className="space-y-4 max-w-sm">
+                  {['5 Устройств', '4K & HDR', '7 Дней записи'].map((feature, i) => (
+                    <div key={i} className="flex items-center justify-between p-6 bg-slate-50 dark:bg-slate-900/60 backdrop-blur-md border border-slate-200 dark:border-white/10 rounded-[2rem] hover:border-neon-cyan/50 transition-all group shadow-sm dark:shadow-xl">
+                      <span className="text-slate-700 dark:text-white font-extrabold text-sm uppercase tracking-widest">{feature}</span>
+                      <div className="w-3 h-3 rounded-full bg-neon-cyan shadow-[0_0_15px_#00D4FF]" />
+                    </div>
+                  ))}
                 </div>
               </div>
-              <div className="lg:w-3/5 grid grid-cols-2 sm:grid-cols-3 gap-6 w-full">
-                {CHANNELS_DATA.slice(0, 6).map((cat, i) => (
-                  <button key={i} onClick={() => { setSelectedChannelCategory(i); setIsChannelsModalOpen(true); }} className="tv-cat group relative overflow-hidden rounded-[2.5rem] aspect-[16/11] bg-slate-900 border dark:border-slate-700 shadow-xl hover:scale-[1.05] transition-all" aria-label={`Смотреть список каналов в категории ${cat.title}`}>
-                    <img src={cat.img} alt={`Каналы категории ${cat.title}`} className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-all duration-700" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent flex flex-col justify-end p-6">
-                      <span className="text-white font-heading font-extrabold text-sm tracking-widest uppercase">{cat.title}</span>
+
+              <div className="lg:w-2/3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8 w-full gsap-reveal">
+                {CHANNELS_DATA.slice(0, 6).map((cat, idx) => (
+                  <button 
+                    key={idx} 
+                    onClick={() => {setSelectedChannelCategory(idx); setIsChannelsModalOpen(true);}}
+                    className="group relative h-56 md:h-64 rounded-[2.5rem] overflow-hidden border border-slate-200 dark:border-white/10 hover:border-neon-cyan transition-all duration-700"
+                  >
+                    <div className="absolute inset-0 transition-transform duration-1000 group-hover:scale-110">
+                      <img src={cat.img} alt={cat.title} className="w-full h-full object-cover brightness-[0.6] group-hover:brightness-[0.8]" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-transparent to-transparent" />
+                    </div>
+                    <div className="absolute inset-0 flex items-center justify-center p-6">
+                      <h4 className="text-white font-heading font-extrabold text-sm md:text-lg uppercase tracking-[0.2em] text-center drop-shadow-2xl">{cat.title}</h4>
                     </div>
                   </button>
                 ))}
@@ -309,44 +365,52 @@ const App: React.FC = () => {
           </div>
         </section>
 
-        {/* News Section */}
-        <section id="news" className="py-32 bg-white dark:bg-slate-900" aria-labelledby="news-title">
+        {/* News */}
+        <section id="news" className="py-32 bg-slate-50 dark:bg-slate-950 scroll-mt-20">
           <div className="container mx-auto px-6">
-            <div className="section-heading text-center mb-20">
-              <h2 id="news-title" className="text-4xl md:text-6xl font-heading font-extrabold dark:text-white">Новости и события компании</h2>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10 mb-20">
+            <h2 className="text-4xl md:text-8xl font-heading font-extrabold mb-24 text-slate-900 dark:text-white text-center leading-tight tracking-tighter">Новости и события компании</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
               {NEWS_DATA.slice(0, visibleNewsCount).map((item) => (
-                <article key={item.id} className="news-card gsap-reveal news-item-card bg-slate-50 dark:bg-slate-800/50 p-10 rounded-[3rem] border border-slate-200 dark:border-slate-800 cursor-pointer group" onClick={() => openNews(item)}>
-                  <div className="flex justify-between items-center mb-8">
-                    <span className={`px-4 py-1.5 rounded-full text-[10px] text-white font-extrabold uppercase tracking-widest ${item.tagColor}`}>{item.tag}</span>
-                    <span className="text-xs font-bold text-slate-400">{item.date}</span>
+                <article key={item.id} onClick={() => openNews(item)} className="news-item-card gsap-reveal cursor-pointer bg-white dark:bg-slate-900/40 p-10 rounded-[3rem] border border-slate-200 dark:border-white/5 flex flex-col h-full hover:shadow-2xl transition-all">
+                  <div className="flex justify-between items-center mb-10">
+                    <span className={`${item.tagColor} text-white text-[11px] font-bold uppercase tracking-widest px-6 py-2 rounded-full shadow-lg`}>{item.tag}</span>
+                    <span className="text-slate-400 dark:text-slate-500 text-xs font-bold tracking-widest">{item.date}</span>
                   </div>
-                  <h3 className="text-2xl font-heading font-bold mb-6 dark:text-white group-hover:text-neon-cyan transition-colors">{item.title}</h3>
-                  <p className="text-slate-600 dark:text-slate-400 text-base leading-relaxed line-clamp-3 mb-8">{item.description}</p>
-                  <button className="read-more-btn text-xs font-extrabold uppercase tracking-[0.2em] text-slate-400 group-hover:text-neon-cyan flex items-center gap-3" aria-label={`Читать новость: ${item.title}`}>Читать полностью</button>
+                  <h3 className="text-2xl md:text-3xl font-heading font-extrabold mb-6 text-slate-800 dark:text-white leading-tight">{item.title}</h3>
+                  <p className="text-slate-500 dark:text-slate-400 text-base leading-relaxed mb-12 line-clamp-4">{item.description}</p>
+                  <div className="mt-auto flex items-center text-neon-cyan text-[11px] font-bold uppercase tracking-[0.3em] transition-all">
+                    Читать полностью
+                  </div>
                 </article>
               ))}
             </div>
+            
             {visibleNewsCount < NEWS_DATA.length && (
-              <div className="flex justify-center">
-                <button onClick={loadMoreNews} className="px-16 py-6 rounded-[2rem] border-2 border-neon-cyan/30 text-neon-cyan font-heading font-extrabold uppercase tracking-[0.3em] hover:border-neon-cyan hover:scale-105 transition-all">Показать еще</button>
+              <div className="mt-20 flex justify-center">
+                <button 
+                  onClick={() => setVisibleNewsCount(prev => Math.min(prev + 3, NEWS_DATA.length))}
+                  className="px-14 py-5 bg-transparent border border-neon-cyan text-neon-cyan rounded-full font-heading font-extrabold text-[12px] uppercase tracking-[0.4em] hover:bg-neon-cyan hover:text-white transition-all shadow-lg"
+                >
+                  Показать еще
+                </button>
               </div>
             )}
           </div>
         </section>
 
         {/* FAQ Section */}
-        <section id="faq" className="py-32 bg-slate-50 dark:bg-slate-950" aria-labelledby="faq-title">
-          <div className="container mx-auto px-6 max-w-4xl">
-            <div className="section-heading text-center mb-20">
-              <h2 id="faq-title" className="text-4xl md:text-5xl font-heading font-extrabold dark:text-white">Часто задаваемые вопросы</h2>
-            </div>
-            <div className="space-y-6">
+        <section id="faq" className="py-24 bg-slate-50 dark:bg-slate-950">
+          <div className="container mx-auto px-6 max-w-3xl">
+            <h2 className="text-4xl md:text-5xl font-heading font-extrabold mb-16 text-slate-900 dark:text-white text-center">Часто задаваемые вопросы</h2>
+            <div className="space-y-4">
               {FAQ.map((item, index) => (
-                <div className="faq-gsap gsap-reveal" key={index}>
-                    <FAQItem question={item.question} answer={item.answer} isOpen={openFAQIndex === index} onClick={() => setOpenFAQIndex(openFAQIndex === index ? null : index)} />
-                </div>
+                <FAQItem 
+                  key={index}
+                  question={item.question}
+                  answer={item.answer}
+                  isOpen={openFAQIndex === index}
+                  onClick={() => setOpenFAQIndex(openFAQIndex === index ? null : index)}
+                />
               ))}
             </div>
           </div>
@@ -377,59 +441,73 @@ const App: React.FC = () => {
               </div>
             </div>
           </div>
-        </section>
-
-        {/* Official & Office Block */}
-        <section id="office" className="py-32 bg-white dark:bg-slate-900" aria-labelledby="office-title">
+        </section>      
+        {/* Official Section */}
+        <section id="official" className="py-24 bg-white dark:bg-slate-950">
           <div className="container mx-auto px-6">
-            <div className="section-heading text-center mb-16">
-              <h2 id="office-title" className="text-4xl md:text-5xl font-heading font-extrabold dark:text-white">Официально</h2>
-            </div>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-6xl mx-auto">
-              <div className="office-info-gsap gsap-reveal p-12 bg-white dark:bg-slate-800/50 rounded-[3.5rem] border border-slate-200 dark:border-slate-700 shadow-xl">
-                <h3 className="text-2xl font-heading font-extrabold mb-8 dark:text-white">Офис обслуживания РоборНЭТ</h3>
-                <div className="flex flex-col md:flex-row gap-10">
-                  <div className="space-y-6 flex-1 text-slate-600 dark:text-slate-300">
-                    <p className="font-bold text-lg">{CONTACTS.address}</p>
-                    <p>{CONTACTS.workingHours} ({CONTACTS.workingHoursWeekend})</p>
+            <h2 className="text-4xl md:text-5xl font-heading font-extrabold mb-16 text-slate-900 dark:text-white text-center tracking-tight">Контакты</h2>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 max-w-6xl mx-auto">
+               <div className="bg-slate-50 dark:bg-slate-900/50 p-12 rounded-[3.5rem] border border-slate-200 dark:border-white/5 relative overflow-hidden group">
+                  <h3 className="text-2xl font-bold text-slate-800 dark:text-white mb-10">Офис обслуживания РоборНЭТ</h3>
+                  <div className="flex flex-col md:flex-row gap-10 relative z-10">
+                     <div className="flex-1 space-y-8">
+                        <div className="gap-5">
+                           <div className="w-12 h-12 rounded-2xl bg-neon-cyan/10 flex items-center justify-center text-neon-cyan shrink-0">
+                              <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                           </div>
+                           <p className="text-slate-700 dark:text-slate-300 leading-relaxed font-bold text-lg">{CONTACTS.address}</p>
+                        </div>
+                        <div className="gap-5">
+                           <div className="w-12 h-12 rounded-2xl bg-blue-500/10 flex items-center justify-center text-blue-500 shrink-0">
+                              <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                           </div>
+                           <p className="text-slate-700 dark:text-slate-300 leading-relaxed font-bold text-lg">{CONTACTS.workingHours} <br/> <span className="text-slate-400">{CONTACTS.workingHoursWeekend}</span></p>
+                        </div>
+                     </div>
+                     <div className="w-full md:w-64 h-52 rounded-3xl overflow-hidden border border-slate-200 dark:border-white/10 shadow-xl">
+                        <img src="https://storage.googleapis.com/uspeshnyy-projects/smit/robotnet.ru/simplemap.png" alt="Карта" className="w-full h-full object-cover dark:grayscale dark:opacity-80" />
+                     </div>
                   </div>
-                  <div className="w-full md:w-64 rounded-3xl overflow-hidden shadow-lg border dark:border-slate-700">
-                    <img src="https://storage.googleapis.com/uspeshnyy-projects/smit/robotnet.ru/simplemap.png" alt="Схема проезда к офису РоборНЭТ в Волгограде" className="w-full h-auto object-cover opacity-80" />
+               </div>
+
+               <div className="bg-slate-50 dark:bg-slate-900/50 p-12 rounded-[3.5rem] border border-slate-200 dark:border-white/5 flex flex-col justify-center">
+                  <h3 className="text-2xl font-bold text-slate-800 dark:text-white mb-10">Юридическая информация</h3>
+                  <div className="space-y-5 text-slate-500 dark:text-slate-400 font-bold text-base md:text-lg">
+                     <p className="text-slate-900 dark:text-white font-extrabold mb-8 text-xl">{CONTACTS.legalName}</p>
+                     <div className="flex justify-between border-b border-slate-200 dark:border-white/5 pb-3"><span>ИНН</span><span className="text-slate-900 dark:text-white">{CONTACTS.inn}</span></div>
+                     <div className="flex justify-between border-b border-slate-200 dark:border-white/5 pb-3"><span>ОГРН</span><span className="text-slate-900 dark:text-white">{CONTACTS.ogrn}</span></div>
+                     <div className="pt-6"><p className="text-[11px] text-slate-400 dark:text-slate-500 uppercase tracking-[0.3em] mb-3">Юридический адрес</p><p className="text-slate-600 dark:text-slate-300 text-sm leading-relaxed font-bold">{CONTACTS.legalAddress}</p></div>
                   </div>
-                </div>
-              </div>
-              <div className="legal-info-gsap gsap-reveal p-12 bg-slate-900 rounded-[3.5rem] border border-white/5 text-white">
-                <h3 className="text-2xl font-heading font-extrabold mb-8 border-b border-white/10 pb-4">Юридическая информация</h3>
-                <div className="space-y-4 font-medium text-slate-400">
-                   <p>{CONTACTS.legalName}</p>
-                   <p>ИНН {CONTACTS.inn} / КПП {CONTACTS.kpp}</p>
-                   <p>ОГРН {CONTACTS.ogrn}</p>
-                   <p className="text-xs">{CONTACTS.legalAddress}</p>
-                </div>
-              </div>
+               </div>
             </div>
           </div>
         </section>
 
-        <GeminiChat />
-
-        {/* Modal Logic Integration */}
-        <PromoModal isOpen={showPromoModal} onClose={() => setShowPromoModal(false)} />
-
-        {showCookieBanner && (
-          <aside className="fixed bottom-6 left-6 z-[2000] w-[90%] max-w-[420px] animate-in slide-in-from-left-10 duration-700" role="alert" aria-live="polite">
-            <div className="bg-white/60 dark:bg-slate-900/60 glass rounded-[2.5rem] p-8 shadow-2xl border border-slate-100 dark:border-slate-800 flex items-start gap-6">
-              <div className="shrink-0 w-16 h-16 bg-[#E8FBF4] dark:bg-[#1A3A34] rounded-2xl flex items-center justify-center text-[#10B981]">
-                <svg className="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M12 2a10 10 0 1 0 10 10 4 4 0 0 1-5-5 4 4 0 0 1-5-5"/></svg>
-              </div>
-              <div className="flex-1">
-                <h4 className="text-xl font-heading font-extrabold mb-2 dark:text-white">Мы используем cookie</h4>
-                <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed mb-6">Это необходимо для корректной работы сайта и анализа трафика. Продолжая, вы соглашаетесь с нашей <a href="https://storage.googleapis.com/uspeshnyy-projects/smit/robotnet.ru/%D0%9F%D0%9E%D0%9B%D0%9E%D0%96%D0%95%D0%9D%D0%98%D0%95_%D0%be%D0%B1_%D0%be%D0%B1%D1%80%D0%B0%D0%B1%D0%BE%D1%82%D0%BA%D0%B5_%D0%9F%D0%94.pdf" className="text-[#10B981] font-bold hover:underline" target="_blank" rel="noopener">политикой обработки данных</a>.</p>
-                <button onClick={() => setShowCookieBanner(false)} className="px-10 py-3 bg-[#10B981] text-white rounded-2xl font-heading font-extrabold text-sm hover:bg-[#059669] transition-colors">Хорошо</button>
-              </div>
+        {/* Official Documents - UPDATED WITH ALL 5 DOCS */}
+        <section id="documents" className="py-32 bg-white dark:bg-slate-950 scroll-mt-20">
+          <div className="container mx-auto px-6">
+            <h2 className="text-4xl md:text-6xl font-heading font-extrabold mb-20 text-slate-900 dark:text-white text-center">Официальные документы</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-7xl mx-auto">
+               {[
+                 { title: "Лицензия №1", desc: "Услуги связи по передаче данных", url: "https://storage.googleapis.com/uspeshnyy-projects/smit/robotnet.ru/lic1.jpg" },
+                 { title: "Лицензия №2", desc: "Телематические услуги связи", url: "https://storage.googleapis.com/uspeshnyy-projects/smit/robotnet.ru/lic2.jpg" },
+                 { title: "Условия договора", desc: "Договор об оказании услуг (PDF)", url: "https://storage.googleapis.com/uspeshnyy-projects/smit/robotnet.ru/%D0%94%D0%BE%D0%B3%D0%BE%D0%B2%D0%BE%D1%80_%D0%9E%D0%A3%D0%A1_%D0%A0%D0%9E%D0%91%D0%9E%D0%A0_11-2022.pdf" },
+                 { title: "Согласие на ОПД", desc: "Положение об обработке ПД (PDF)", url: "https://storage.googleapis.com/uspeshnyy-projects/smit/robotnet.ru/%D0%9F%D0%9E%D0%9B%D0%9E%D0%96%D0%95%D0%9D%D0%98%D0%95_%D0%be%D0%B1_%D0%be%D0%B1%D1%80%D0%B0%D0%B1%D0%BE%D1%82%D0%BA%D0%B5_%D0%9F%D0%94.pdf" },
+                 { title: "Регламент", desc: "Регламент РоборНЭТ (PDF)", url: "https://storage.googleapis.com/uspeshnyy-projects/smit/robotnet.ru/%D0%A0%D0%B5%D0%B3%D0%BB%D0%B0%D0%BC%D0%B5%D0%BD%D1%82_%D0%A0%D0%9E%D0%91%D0%9E%D0%A0.pdf" }
+               ].map((doc, idx) => (
+                 <a key={idx} href={doc.url} target="_blank" className="flex items-center gap-6 p-8 bg-slate-50 dark:bg-slate-900/40 rounded-[2rem] border border-slate-200 dark:border-white/5 hover:border-neon-cyan/40 transition-all group shadow-sm dark:shadow-xl">
+                    <div className="w-16 h-16 bg-white dark:bg-slate-800 rounded-2xl flex items-center justify-center text-slate-400 group-hover:text-neon-cyan transition-all border border-slate-100 dark:border-white/5">
+                      <svg className="w-9 h-9" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                    </div>
+                    <div>
+                      <h4 className="text-xl font-bold text-slate-800 dark:text-white group-hover:text-neon-cyan transition-colors">{doc.title}</h4>
+                      <p className="text-[10px] text-slate-500 uppercase tracking-widest mt-1 font-bold">{doc.desc}</p>
+                    </div>
+                 </a>
+               ))}
             </div>
-          </aside>
-        )}
+          </div>
+        </section>
 
         {/* Footer */}
         <footer className="bg-slate-950 text-white pt-24 pb-10 border-t border-white/5 mt-auto" aria-label="Подвал сайта">
@@ -489,42 +567,43 @@ const App: React.FC = () => {
               </div>
             </div>
             <div className="pt-8 border-t border-white/5 text-center flex flex-col md:flex-row justify-between items-center gap-4">
-              <p className="text-slate-500 text-[10px] font-bold uppercase tracking-[0.2em]">© 2011-2024 РоборНЭТ. Лицензии №163740, №163741. Услуги связи ООО "РОБОР".</p>
+              <p className="text-slate-500 text-[10px] font-bold uppercase tracking-[0.2em]">© 2011&mdash;2026 РоборНЭТ. Лицензии №163740, №163741. Услуги связи ООО "РОБОР".</p>
               <a href="https://itc34.ru" target="_blank" rel="noopener" className="text-slate-600 text-[10px] font-bold uppercase tracking-widest hover:text-white transition-colors flex items-center gap-2">
                  <span className="w-1.5 h-1.5 rounded-full bg-neon-lime"></span>
-                 Design by ITConsulting
+                Создание ITConsulting
               </a>
             </div>
           </div>
         </footer>
 
-        {/* Scroll Top Button */}
-        <button onClick={scrollToTop} className={`fixed bottom-28 right-6 w-12 h-12 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl flex items-center justify-center text-slate-500 dark:text-slate-300 transition-all z-[190] hover:border-neon-cyan hover:text-neon-cyan shadow-xl ${scrolled ? 'translate-y-0 opacity-100' : 'translate-y-20 opacity-0 pointer-events-none'}`} aria-label="Вернуться в начало страницы">
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 15l7-7 7 7" /></svg>
-        </button>
+        <PromoModal isOpen={showPromoModal} onClose={() => setShowPromoModal(false)} />
 
-        {/* Detail Modals for News and Channels */}
+        {/* Modal for News */}
         {newsModalActive && selectedNews && (
-          <div className="fixed inset-0 z-[1000] flex items-center justify-center p-6 bg-slate-950/90 backdrop-blur-xl" onClick={closeNews} role="dialog" aria-modal="true">
-            <div className="bg-white dark:bg-slate-900 w-full max-w-3xl rounded-[3rem] p-12 overflow-y-auto max-h-[90vh]" onClick={e => e.stopPropagation()}>
-              <h2 className="text-4xl font-heading font-extrabold mb-10 dark:text-white leading-tight">{selectedNews.title}</h2>
-              <div className="text-slate-600 dark:text-slate-300 text-lg leading-relaxed whitespace-pre-wrap">{selectedNews.fullText || selectedNews.description}</div>
-              <button onClick={closeNews} className="mt-12 px-12 py-5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-2xl font-heading font-extrabold uppercase tracking-widest hover:scale-105 transition-all">Закрыть</button>
+          <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4 bg-slate-950/95 backdrop-blur-3xl animate-in fade-in" onClick={closeNews}>
+            <div className="bg-slate-900 w-full max-w-4xl rounded-[3.5rem] p-10 md:p-16 overflow-y-auto max-h-[90vh] relative shadow-2xl border border-white/10" onClick={e => e.stopPropagation()}>
+              <button onClick={closeNews} className="absolute top-6 right-6 w-14 h-14 flex items-center justify-center bg-slate-800 rounded-full text-4xl text-white hover:bg-neon-coral transition-all hover:scale-110 active:scale-90">&times;</button>
+              <h2 className="text-3xl md:text-5xl font-heading font-extrabold mb-10 text-white leading-tight pr-8 tracking-tight">{selectedNews.title}</h2>
+              <div className="text-slate-300 text-lg md:text-xl leading-relaxed whitespace-pre-wrap font-medium">{selectedNews.fullText || selectedNews.description}</div>
             </div>
           </div>
         )}
 
+        {/* Modal for Channels */}
         {isChannelsModalOpen && (
-          <div className="fixed inset-0 z-[1000] flex items-center justify-center p-6 bg-slate-950/95 backdrop-blur-2xl" onClick={() => setIsChannelsModalOpen(false)} role="dialog" aria-modal="true">
-            <div className="bg-white dark:bg-slate-900 w-full max-w-5xl h-[85vh] rounded-[4rem] overflow-hidden flex flex-col transition-all border border-white/5" onClick={e => e.stopPropagation()}>
-               <div className="p-10 border-b dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/30">
-                  <h2 className="text-3xl font-heading font-extrabold dark:text-white">{CHANNELS_DATA[selectedChannelCategory].title}</h2>
-                  <button onClick={() => setIsChannelsModalOpen(false)} className="text-3xl dark:text-white" aria-label="Закрыть список каналов">&times;</button>
+          <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4 bg-slate-950/98 backdrop-blur-3xl animate-in fade-in" onClick={() => setIsChannelsModalOpen(false)}>
+            <div className="bg-slate-900 w-full max-w-6xl h-[85vh] rounded-[4rem] overflow-hidden flex flex-col border border-white/10 relative shadow-2xl" onClick={e => e.stopPropagation()}>
+               <div className="p-10 border-b border-white/10 flex justify-between items-center bg-slate-800/20 backdrop-blur-md">
+                  <div>
+                    <span className="text-neon-cyan text-[10px] font-extrabold uppercase tracking-[0.4em] mb-2 block">Список телеканалов</span>
+                    <h2 className="text-3xl font-heading font-extrabold text-white tracking-tight">{CHANNELS_DATA[selectedChannelCategory].title}</h2>
+                  </div>
+                  <button onClick={() => setIsChannelsModalOpen(false)} className="w-16 h-16 flex items-center justify-center bg-slate-800 rounded-full text-4xl text-white hover:bg-neon-coral transition-all hover:scale-110">&times;</button>
                </div>
-               <div className="flex-1 overflow-y-auto p-12 grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-8">
+               <div className="flex-1 overflow-y-auto p-12 grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-8 bg-slate-950/50 custom-scrollbar">
                   {CHANNELS_DATA[selectedChannelCategory].list.map((ch, idx) => (
-                    <div key={idx} className="aspect-square bg-white dark:bg-slate-800 rounded-[2rem] flex items-center justify-center p-6 border dark:border-slate-700 hover:border-neon-cyan transition-all">
-                       <img src={ch} alt={`Логотип телеканала`} className="max-w-full max-h-full object-contain filter dark:brightness-110" />
+                    <div key={idx} className="aspect-square bg-slate-800/40 rounded-[2.5rem] flex items-center justify-center p-8 border border-white/5 hover:border-neon-cyan/50 hover:bg-slate-800/60 transition-all shadow-lg group">
+                       <img src={ch} alt="Channel" className="max-w-full max-h-full object-contain brightness-110 group-hover:scale-110 transition-transform duration-500" />
                     </div>
                   ))}
                </div>
@@ -532,6 +611,7 @@ const App: React.FC = () => {
           </div>
         )}
       </div>
+      <GeminiChat />
     </div>
   );
 };

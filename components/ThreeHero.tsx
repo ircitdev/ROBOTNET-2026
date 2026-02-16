@@ -1,6 +1,6 @@
 
 import React, { useRef, useEffect } from 'react';
-import * as THREE from 'https://esm.sh/three@0.182.0';
+import * as THREE from 'three';
 
 const ThreeHero: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
