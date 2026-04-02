@@ -265,6 +265,7 @@ async function aidaPost(sessionId: string, message: string, isVoice = false): Pr
 // ---------- Chat session persistence ----------
 const CHAT_STORAGE_KEY = 'robornet_chat_history';
 const CHAT_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours
+const VOICE_GREETED_KEY = 'robornet_voice_greeted'; // daily auto-greeting
 
 const INITIAL_BOT_MESSAGE: Message = {
   role: 'model',
@@ -830,6 +831,21 @@ ${TARIFFS.map((t) => `- «${t.name}» — ${t.speed} Мбит/с, ${t.price} р�
   };
 
   useEffect(() => () => cleanupVoice(), []);
+
+  // Auto voice greeting — opens voice chat 60s after page load (once per day)
+  useEffect(() => {
+    const today = new Date().toDateString();
+    if (localStorage.getItem(VOICE_GREETED_KEY) === today) return;
+
+    const timer = setTimeout(() => {
+      localStorage.setItem(VOICE_GREETED_KEY, today);
+      setIsOpen(true);
+      setMode('voice');
+      setTimeout(() => connectVoice(), 600);
+    }, 60_000);
+
+    return () => clearTimeout(timer);
+  }, []);
 
   const close = () => {
     if (mode === 'voice' && isVoiceActive) stopVoice();
