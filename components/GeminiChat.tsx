@@ -1,7 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI } from '@google/genai';
-import { getGeminiResponse } from '../services/geminiService';
 import { Message } from '../types';
 import { CONTACTS } from '../constants/contacts';
 import { TARIFFS } from '../tariffsData';
@@ -58,27 +57,193 @@ function parseResponse(text: string): { cleanText: string; buttons: string[] } {
   return { cleanText, buttons };
 }
 
+// ---------- Geolocation helpers ----------
+function isMobile(): boolean {
+  return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.innerWidth <= 768;
+}
+
+async function getAddressFromCoords(lat: number, lon: number): Promise<string> {
+  const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1&accept-language=ru`;
+  const response = await fetch(url, { headers: { 'User-Agent': 'RoborNET-Widget/1.0' } });
+  if (!response.ok) throw new Error('Geocoding error');
+  const data = await response.json();
+  if (!data?.address) throw new Error('No address');
+
+  const addr = data.address;
+  const parts: string[] = [];
+
+  const city = addr.city || addr.town || addr.village || addr.hamlet || addr.municipality;
+  if (city) {
+    parts.push('г. ' + city.replace(/^город\s+/i, '').replace(/^г\.\s*/i, ''));
+  }
+
+  const street = addr.road || addr.street;
+  if (street) {
+    const cleanStreet = street
+      .replace(/^улица\s+/i, '').replace(/^ул\.\s*/i, '')
+      .replace(/^проспект\s+/i, '').replace(/^пр\.\s*/i, '')
+      .replace(/^переулок\s+/i, '').replace(/^пер\.\s*/i, '')
+      .replace(/^бульвар\s+/i, '').replace(/^б-р\s*/i, '')
+      .replace(/^проезд\s+/i, '').replace(/^шоссе\s+/i, '');
+    let streetType = 'ул.';
+    if (/^проспект\s/i.test(street) || /^пр\.\s/i.test(street)) streetType = 'пр.';
+    else if (/^переулок\s/i.test(street) || /^пер\.\s/i.test(street)) streetType = 'пер.';
+    else if (/^бульвар\s/i.test(street) || /^б-р\s/i.test(street)) streetType = 'б-р';
+    else if (/^проезд\s/i.test(street)) streetType = 'пр-д';
+    else if (/^шоссе\s/i.test(street)) streetType = 'ш.';
+    parts.push(streetType + ' ' + cleanStreet);
+  }
+
+  const house = addr.house_number;
+  if (house) parts.push('д. ' + house);
+
+  return parts.length > 0 ? parts.join(', ') : data.display_name;
+}
+
+const ADDRESS_ASK_KW = ['укажите.*адрес', 'ваш адрес подключения', 'какой.*адрес', 'где вы.*находитесь', 'адрес.*подключен'];
+const ADDRESS_EXCLUDE_KW = ['квартира или', 'это квартира', 'частный дом', 'номер квартиры', 'какой номер', 'адрес:', 'адрес принят', 'по адресу', 'вся информация', 'ваш.*заяв'];
+
+function checkAddressQuestion(text: string): boolean {
+  const lower = text.toLowerCase();
+  const hasAsk = ADDRESS_ASK_KW.some(kw => new RegExp(kw, 'i').test(lower));
+  const hasExclude = ADDRESS_EXCLUDE_KW.some(kw => kw.includes('.*') ? new RegExp(kw, 'i').test(lower) : lower.includes(kw));
+  const hasAddress = /кв\.\s*\d|д\.\s*\d+.*кв/i.test(text);
+  return hasAsk && !hasExclude && !hasAddress;
+}
+
+// ---------- Phone mask helpers ----------
+const PHONE_ASK_KW = ['номер телефона', 'ваш телефон', 'телефон для связи',
+  'контактный телефон', 'номер для связи', 'ваш номер',
+  'введите.*телефон', 'укажите.*телефон', 'подскажите.*телефон',
+  'оставьте.*телефон', 'номер.*для связи'];
+const PHONE_EXCLUDE_KW = ['принят', 'спасибо', 'записал', 'нашёл', 'нашел',
+  'найден', 'по номеру', 'на номер', 'с номером'];
+
+function checkPhoneQuestion(text: string): boolean {
+  const lo = text.toLowerCase();
+  const hasKw = PHONE_ASK_KW.some(k => new RegExp(k, 'i').test(lo));
+  const hasEx = PHONE_EXCLUDE_KW.some(k => lo.includes(k));
+  return hasKw && !hasEx;
+}
+
+function formatPhone(digits: string): string {
+  let r = '+7(';
+  for (let i = 0; i < digits.length && i < 10; i++) {
+    if (i === 3) r += ') ';
+    if (i === 6) r += '-';
+    if (i === 8) r += '-';
+    r += digits[i];
+  }
+  return r;
+}
+
+function extractPhoneDigits(value: string): string {
+  const raw = value.replace(/\D/g, '');
+  let digits = raw;
+  if (digits.startsWith('7')) digits = digits.substring(1);
+  else if (digits.startsWith('8')) digits = digits.substring(1);
+  if (digits.length > 10) digits = digits.substring(0, 10);
+  return digits;
+}
+
 // ---------- MessageContent ----------
-const MessageContent: React.FC<{ text: string }> = ({ text }) => {
-  const parts = text
-    .replace(/\*\*(.*?)\*\*/g, '<strong class="font-extrabold text-slate-900 dark:text-white">$1</strong>')
-    .replace(/\*(.*?)\*/g, '<em>$1</em>')
-    .replace(/^\* (.*?)$/gm, '<span class="text-neon-cyan">•</span> $1')
-    .split('\n')
-    .map((line, i) =>
-      line.trim()
-        ? <p key={i} className="mb-1.5 last:mb-0" dangerouslySetInnerHTML={{ __html: line }} />
-        : <div key={i} className="h-1.5" />
-    );
-  return <div className="leading-relaxed">{parts}</div>;
+const MessageContent: React.FC<{
+  text: string;
+  onSuggestionClick?: (text: string) => void;
+  isDark?: boolean;
+}> = ({ text, onSuggestionClick, isDark }) => {
+  const lines = text.split('\n');
+
+  return (
+    <div className="leading-relaxed">
+      {lines.map((line, i) => {
+        // Inline suggestion buttons from 💡 lines
+        if (line.includes('💡')) {
+          const match = line.match(/💡\s*(.+)/);
+          if (match) {
+            const fullText = match[1].trim();
+            let suggestionText = fullText.replace(/^[^:«"]+[:«"]\s*/, '');
+            suggestionText = suggestionText.replace(/[»"']*$/g, '');
+
+            const variants = suggestionText
+              .split(/,\s*|\s+или\s+|»\s*,?\s*«|"\s*,?\s*"/)
+              .map(v => v.trim())
+              .map(v => v.replace(/^[«"''«]|[»"'']$/g, ''))
+              .map(v => v.replace(/<[^>]+>/g, ''))
+              .map(v => v.replace(/[»«"']+/g, ''))
+              .filter(v => v.length > 0 && v.length < 50);
+
+            const header = fullText.split(/[:«]/)[0];
+
+            return (
+              <div key={i}>
+                <p style={{ color: '#00D4FF', fontWeight: 600, fontSize: '13px', margin: '8px 0 4px 0' }}>
+                  💡 {header}
+                </p>
+                {variants.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '6px' }}>
+                    {variants.map((v, vi) => (
+                      <button
+                        key={vi}
+                        onClick={() => onSuggestionClick?.(v)}
+                        style={{
+                          display: 'inline-block',
+                          padding: '6px 14px',
+                          background: isDark ? 'rgba(0,212,255,0.15)' : 'rgba(0,212,255,0.1)',
+                          color: '#00D4FF',
+                          border: '1px solid rgba(0,212,255,0.3)',
+                          borderRadius: '18px',
+                          fontSize: '13px',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          transition: 'all 0.2s',
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = '#00D4FF';
+                          e.currentTarget.style.color = '#0f172a';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = isDark ? 'rgba(0,212,255,0.15)' : 'rgba(0,212,255,0.1)';
+                          e.currentTarget.style.color = '#00D4FF';
+                        }}
+                      >
+                        {v}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          }
+        }
+
+        if (line.trim()) {
+          const html = line
+            .replace(/\*\*(.*?)\*\*/g, '<strong class="font-extrabold text-slate-900 dark:text-white">$1</strong>')
+            .replace(/\*(.*?)\*/g, '<em>$1</em>')
+            .replace(/^\* (.*?)$/gm, '<span class="text-neon-cyan">•</span> $1');
+          return <p key={i} className="mb-1.5 last:mb-0" dangerouslySetInnerHTML={{ __html: html }} />;
+        }
+
+        return <div key={i} className="h-1.5" />;
+      })}
+    </div>
+  );
 };
+
+// ---------- Gemini API key (loaded at runtime) ----------
+let _geminiApiKey = '';
+fetch('https://aida.smit34.ru/api/gemini-key')
+  .then(r => r.json())
+  .then(d => { if (d.key) _geminiApiKey = d.key; })
+  .catch(() => {});
 
 // ---------- AIDA relay session ID ----------
 const AIDA_CHAT_URL = 'https://aida.smit34.ru/chat';
 const RELAY_SESSION_KEY = 'robornet_relay_session';
 function getRelaySession(): string {
   let id = localStorage.getItem(RELAY_SESSION_KEY);
-  if (!id) {
+  if (!id || !id.startsWith('robornet_')) {
     id = `robornet_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     localStorage.setItem(RELAY_SESSION_KEY, id);
   }
@@ -86,13 +251,38 @@ function getRelaySession(): string {
 }
 
 // Post to AIDA chat backend
-async function aidaPost(sessionId: string, message: string): Promise<string> {
+async function aidaPost(sessionId: string, message: string, isVoice = false): Promise<string> {
+  const body: Record<string, unknown> = { session_id: sessionId, message };
+  if (isVoice) body.is_voice = true;
   const r = await fetch(AIDA_CHAT_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ session_id: sessionId, message }),
+    body: JSON.stringify(body),
   });
   return ((await r.json()).response as string) || '';
+}
+
+// ---------- Chat session persistence ----------
+const CHAT_STORAGE_KEY = 'robornet_chat_history';
+const CHAT_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours
+
+const INITIAL_BOT_MESSAGE: Message = {
+  role: 'model',
+  text: 'Привет! Я AI-консультант РоборНЭТ. ⚡️ Помогу подобрать тариф, изучить ТВ-пакеты или ответить на вопросы. Что вас интересует?',
+};
+
+function loadSavedMessages(): Message[] {
+  try {
+    const saved = localStorage.getItem(CHAT_STORAGE_KEY);
+    if (saved) {
+      const { messages: msgs, timestamp } = JSON.parse(saved);
+      if (Date.now() - timestamp < CHAT_TTL_MS && msgs?.length > 1) {
+        return msgs;
+      }
+      localStorage.removeItem(CHAT_STORAGE_KEY);
+    }
+  } catch {}
+  return [INITIAL_BOT_MESSAGE];
 }
 
 // ---------- Main Component ----------
@@ -100,13 +290,21 @@ const GeminiChat: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [mode, setMode] = useState<'chat' | 'voice'>('chat');
   const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'));
-  const [messages, setMessages] = useState<Message[]>([{
-    role: 'model',
-    text: 'Привет! Я AI-консультант РоборНЭТ. ⚡️ Помогу подобрать тариф, изучить ТВ-пакеты или ответить на вопросы. Что вас интересует?',
-  }]);
+  const [messages, setMessages] = useState<Message[]>(loadSavedMessages);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [suggestions, setSuggestions] = useState<string[]>(INITIAL_SUGGESTIONS);
+  const [suggestions, setSuggestions] = useState<string[]>(() => {
+    const saved = loadSavedMessages();
+    return saved.length > 1 ? [] : INITIAL_SUGGESTIONS;
+  });
+
+  // Geolocation state
+  const [geoStatus, setGeoStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
+  const [geoMessageIdx, setGeoMessageIdx] = useState<number>(-1);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Phone mask state
+  const [phoneMode, setPhoneMode] = useState(false);
 
   // Voice state
   const [isVoiceActive, setIsVoiceActive] = useState(false);
@@ -127,6 +325,7 @@ const GeminiChat: React.FC = () => {
   const voiceTranscriptRef = useRef<{ role: string; text: string }[]>([]);
   const voiceCurrentBotRef = useRef('');
   const userInputAccumulatorRef = useRef('');
+  const ticketSentRef = useRef(false);
 
   // Track site theme
   useEffect(() => {
@@ -162,21 +361,88 @@ const GeminiChat: React.FC = () => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages, isLoading]);
 
+  // Persist chat messages to localStorage
+  useEffect(() => {
+    if (messages.length > 1) {
+      try {
+        localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify({
+          messages,
+          timestamp: Date.now()
+        }));
+      } catch {}
+    }
+  }, [messages]);
+
+  // ============================
+  // GEOLOCATION
+  // ============================
+  const handleGeoDetect = async (msgIdx: number) => {
+    if (!navigator.geolocation) {
+      setGeoStatus('error');
+      return;
+    }
+    setGeoStatus('loading');
+    setGeoMessageIdx(msgIdx);
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const address = await getAddressFromCoords(position.coords.latitude, position.coords.longitude);
+          setInput(address + ', кв. ');
+          setGeoStatus('done');
+          inputRef.current?.focus();
+          setTimeout(() => setGeoStatus('idle'), 2000);
+        } catch {
+          setGeoStatus('error');
+          setTimeout(() => setGeoStatus('idle'), 2000);
+        }
+      },
+      (error) => {
+        console.error('Geolocation error:', error);
+        setGeoStatus('error');
+        setTimeout(() => setGeoStatus('idle'), 2000);
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+    );
+  };
+
   // ============================
   // CHAT
   // ============================
   const sendMessage = async (text: string) => {
-    if (!text.trim() || isLoading) return;
-    setMessages((prev) => [...prev, { role: 'user', text }]);
-    setInput('');
+    let message = text;
+    // Phone mode: extract clean number, show formatted in chat
+    if (phoneMode && text.startsWith('+7')) {
+      const digits = extractPhoneDigits(text);
+      if (digits.length < 10) return;
+      message = '+7' + digits;
+      setMessages((prev) => [...prev, { role: 'user', text: formatPhone(digits) }]);
+      setPhoneMode(false);
+      setInput('');
+    } else {
+      if (!text.trim() || isLoading) return;
+      setMessages((prev) => [...prev, { role: 'user', text }]);
+      setInput('');
+    }
     setIsLoading(true);
     setSuggestions([]);
+    setPhoneMode(false);
+    setGeoStatus('idle');
+    setGeoMessageIdx(-1);
     try {
-      const history = messages.map((m) => ({ role: m.role, parts: [{ text: m.text }] }));
-      const raw = await getGeminiResponse(text, history as any);
-      const { cleanText, buttons } = parseResponse(raw);
-      setMessages((prev) => [...prev, { role: 'model', text: cleanText }]);
-      setSuggestions(buttons.length > 0 ? buttons : []);
+      const sessionId = getRelaySession();
+      const raw = await aidaPost(sessionId, message);
+      const { buttons } = parseResponse(raw);
+      // Store raw text — inline 💡 buttons rendered by MessageContent
+      setMessages((prev) => [...prev, { role: 'model', text: raw }]);
+      // Bottom bar only for non-💡 suggestions
+      setSuggestions(buttons.length > 0 ? [] : []);
+      // Phone mask: activate when bot asks for phone number
+      if (checkPhoneQuestion(raw)) {
+        setPhoneMode(true);
+        setInput('+7(');
+        setTimeout(() => inputRef.current?.focus(), 300);
+      }
     } catch {
       setMessages((prev) => [...prev, { role: 'model', text: `Ошибка соединения. Позвоните нам: ${CONTACTS.phoneShort}` }]);
     } finally {
@@ -207,69 +473,55 @@ const GeminiChat: React.FC = () => {
   // VOICE stop + AIDA relay
   // ============================
   const stopVoice = () => {
-    const transcript = voiceTranscriptRef.current;
+    // Flush any pending user speech before relay
+    if (userInputAccumulatorRef.current) {
+      voiceTranscriptRef.current.push({ role: 'user', text: userInputAccumulatorRef.current });
+    }
+    if (voiceCurrentBotRef.current.trim()) {
+      voiceTranscriptRef.current.push({ role: 'bot', text: voiceCurrentBotRef.current.trim() });
+    }
 
+    const transcript = [...voiceTranscriptRef.current];
+    console.log('[stopVoice] transcript length:', transcript.length, transcript);
+
+    // Direct API call to create ticket/lead (no relay)
     if (transcript.length > 0) {
-      // Find confirmation message from AI
-      const botMsgs = transcript.filter((m) => m.role === 'bot');
-      const confirmMsg =
-        botMsgs.slice().reverse().find((m) => {
-          const t = m.text.toLowerCase();
-          return (t.includes('верн') || t.includes('данные') || t.includes('повтор')) &&
-            (t.includes('тариф') || t.includes('номер') || t.includes('телефон') || t.includes('адрес') || t.includes('имя'));
-        }) ?? (botMsgs.length >= 2 ? botMsgs[botMsgs.length - 2] : botMsgs[botMsgs.length - 1]);
+      const allText = transcript.map((m) => m.text).join(' ').replace(/\s+/g, ' ');
+      // Normalize digits: "8 9 0 6 6 4 6 1 5 14" → "89066461514"
+      const digitsNorm = allText.replace(/(\d)\s+(?=\d)/g, '$1');
 
-      if (confirmMsg) {
-        const raw = confirmMsg.text.replace(/\s+/g, ' ').trim();
-        const nameM = raw.match(/Имя:\s*([А-ЯЁа-яё][а-яё]+)/i) ?? raw.match(/(?:зовут\s*)([А-ЯЁа-яё][а-яё]+)/i);
-        const phoneM = raw.match(/Телефон:\s*(\+?[\d][\d\s\-(]{8,14})/i) ?? raw.match(/(\+?[78][\s-]?\(?\d{3}\)?[\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2})/);
-        const addrM = raw.match(/Адрес:\s*(.+?)(?:,\s*(?:Тариф|Телефон|Имя)|$)/i);
-        const tariffM = raw.match(/Тариф:\s*[«"]?([^»".,\n]+)/i) ?? raw.match(/«([^»]+)»/);
+      const nameM = allText.match(/Имя:\s*([А-ЯЁа-яё][а-яё]+(?:\s+[А-ЯЁа-яё][а-яё]+)?)/i)
+        ?? allText.match(/(?:вас зовут|меня зовут|зовут)\s+([А-ЯЁа-яё][а-яё]+)/i)
+        ?? allText.match(/^([А-ЯЁ][а-яё]{2,}),\s*(?:телефон|номер)/i)
+        ?? allText.match(/([А-ЯЁ][а-яё]{2,}),\s*телефон/i);
+      const phoneM = digitsNorm.match(/[Тт]елефон[:\s]+(\+?[\d][\d\s\-(]{8,14})/i)
+        ?? digitsNorm.match(/(\+?[78]\(?\d{3}\)?\d{3}\d{2}\d{2})/)
+        ?? allText.match(/(\+?[78][\s-]?\(?\d{3}\)?[\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2})/);
+      const addrM = allText.match(/[Аа]дрес:\s*(.+?)(?:,\s*(?:Тариф|Телефон|Имя|Проблема)|[.!?]|$)/i);
+      const tariffM = allText.match(/Тариф:\s*[«"]?([^»".,\n]+)/i) ?? allText.match(/«([^»]+)»/);
+      const problemM = allText.match(/[Пп]роблем[аы]?:\s*(.+?)(?:[.]\s*[А-ЯЁ]|[.]\s*$|\s*[Вв]сё верно|\s*[Сс]оздаю|$)/i)
+        ?? allText.match(/проблем[аы]?[:\s]+(.+?)(?:[.]\s|$)/i);
 
-        const name = nameM?.[1]?.trim() ?? '';
-        const phone = phoneM?.[1]?.trim() ?? '';
-        const addr = addrM?.[1]?.trim() ?? '';
-        const tariff = tariffM?.[1]?.trim() ?? '';
+      const name = nameM?.[1]?.trim() ?? '';
+      const phone = (phoneM?.[1]?.trim() ?? '').replace(/\s/g, '');
+      const addr = addrM?.[1]?.trim() ?? '';
+      const tariff = tariffM?.[1]?.trim() ?? '';
+      const problem = problemM?.[1]?.trim() ?? '';
 
-        // Relay conversation to AIDA to create FreescOut ticket + amoCRM lead
-        const relayId = `robornet_voice_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-        const runRelay = async () => {
-          let sentName = false, sentPhone = false, sentAddr = false, sentTariff = false;
+      console.log('[stopVoice] extracted:', { name, phone, addr, tariff, problem });
 
-          const nextMsg = (resp: string): string | null => {
-            const r = resp.toLowerCase();
-            if (sentPhone && (r.includes('принят') || r.includes('создан') || r.includes('зарегистрир'))) return null;
-            if (!sentName && (r.includes('зовут') || r.includes('ваше имя') || r.includes('обращаться'))) {
-              sentName = true; sentPhone = true;
-              return phone ? `${name || 'Клиент'}. Мой телефон: ${phone}` : name || 'Клиент';
-            }
-            if (!sentPhone && (r.includes('телефон') || r.includes('номер'))) { sentPhone = true; return phone || ''; }
-            if (!sentAddr && (r.includes('адрес') || r.includes('проживаете') || (r.includes('где') && r.includes('подключ')))) {
-              sentAddr = true; return addr || 'Волгоград';
-            }
-            if (!sentTariff && (r.includes('тариф') || r.includes('задачи') || r.includes('нужен интернет'))) {
-              sentTariff = true; return tariff ? `Хочу тариф «${tariff}»` : 'Самый популярный';
-            }
-            if (r.includes('время') || r.includes('удобно') || r.includes('когда')) return 'В любое рабочее время';
-            if (r.includes('верно') || r.includes('правильн') || r.includes('данные')) return 'Да, всё верно';
-            if (sentAddr && sentPhone && (r.includes('возможность подключения') || r.includes('доступно') || r.includes('подключим'))) {
-              return 'Отлично! Пожалуйста, оформите заявку на подключение интернета.';
-            }
-            if (r.includes('роутер') || r.includes('wi-fi') || r.includes('камер') || r.includes('дополнительн')) {
-              return 'Нет, спасибо. Оформите только заявку на подключение интернета.';
-            }
-            if (!sentPhone && phone) { sentPhone = true; return phone; }
-            return 'Да, оформите заявку на подключение';
-          };
-
-          let resp = await aidaPost(relayId, 'Хочу подключить интернет');
-          for (let t = 0; t < 14; t++) {
-            const msg = nextMsg(resp);
-            if (!msg) break;
-            resp = await aidaPost(relayId, msg);
-          }
-        };
-        runRelay().catch((e) => console.error('[relay] error:', e));
+      if (name || phone) {
+        ticketSentRef.current = true;
+        fetch('https://aida.smit34.ru/api/voice-create-ticket', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, phone, address: addr, problem, tariff, source: 'robor' }),
+        })
+          .then((r) => r.json())
+          .then((data) => console.log('[Voice ticket] result:', data))
+          .catch((e) => console.error('[Voice ticket] error:', e));
+      } else {
+        console.warn('[Voice ticket] No name/phone parsed from transcript');
       }
     }
 
@@ -284,7 +536,7 @@ const GeminiChat: React.FC = () => {
         role: 'model',
         text: 'Голосовой разговор завершён. Ваша заявка обработана. Если есть вопросы — напишите!',
       }]);
-      setSuggestions(['Уточнить тариф 📋', 'Позвонить сейчас 📞', 'Написать в Telegram 💬']);
+      setSuggestions([]);
     }
 
     cleanupVoice();
@@ -298,12 +550,53 @@ const GeminiChat: React.FC = () => {
   const connectVoice = async () => {
     const connectionId = Date.now().toString();
     activeConnectionIdRef.current = connectionId;
+    ticketSentRef.current = false;
     setVoiceStatus('connecting');
     setIsVoiceActive(true);
     setVoiceError(null);
 
     const handleDrop = (msg: string) => {
       if (activeConnectionIdRef.current !== connectionId && activeConnectionIdRef.current !== null) return;
+      // Flush accumulators
+      if (userInputAccumulatorRef.current) {
+        voiceTranscriptRef.current.push({ role: 'user', text: userInputAccumulatorRef.current });
+        userInputAccumulatorRef.current = '';
+      }
+      if (voiceCurrentBotRef.current.trim()) {
+        voiceTranscriptRef.current.push({ role: 'bot', text: voiceCurrentBotRef.current.trim() });
+        voiceCurrentBotRef.current = '';
+      }
+      console.log('[handleDrop] transcript len:', voiceTranscriptRef.current.length);
+      // Direct API call
+      const allText = voiceTranscriptRef.current.map((m) => m.text).join(' ').replace(/\s+/g, ' ');
+      const digitsNorm = allText.replace(/(\d)\s+(?=\d)/g, '$1');
+      const nameM = allText.match(/Имя:\s*([А-ЯЁа-яё][а-яё]+(?:\s+[А-ЯЁа-яё][а-яё]+)?)/i)
+        ?? allText.match(/(?:вас зовут|меня зовут|зовут)\s+([А-ЯЁа-яё][а-яё]+)/i)
+        ?? allText.match(/([А-ЯЁ][а-яё]{2,}),\s*телефон/i);
+      const phoneM = digitsNorm.match(/[Тт]елефон[:\s]+(\+?[\d][\d\s\-(]{8,14})/i)
+        ?? digitsNorm.match(/(\+?[78]\(?\d{3}\)?\d{3}\d{2}\d{2})/)
+        ?? allText.match(/(\+?[78][\s-]?\(?\d{3}\)?[\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2})/);
+      const addrM = allText.match(/[Аа]дрес:\s*(.+?)(?:,\s*(?:Тариф|Телефон|Имя|Проблема)|[.!?]|$)/i);
+      const tariffM = allText.match(/Тариф:\s*[«"]?([^»".,\n]+)/i) ?? allText.match(/«([^»]+)»/);
+      const problemM = allText.match(/[Пп]роблем[аы]?:\s*(.+?)(?:[.]\s*[А-ЯЁ]|[.]\s*$|\s*[Вв]сё верно|\s*[Сс]оздаю|$)/i);
+      const name = nameM?.[1]?.trim() ?? '';
+      const phone = (phoneM?.[1]?.trim() ?? '').replace(/\s/g, '');
+      const addr = addrM?.[1]?.trim() ?? '';
+      const tariff = tariffM?.[1]?.trim() ?? '';
+      const problem = problemM?.[1]?.trim() ?? '';
+      console.log('[handleDrop] parsed:', { name, phone, addr, tariff, problem });
+      if ((name || phone) && !ticketSentRef.current) {
+        ticketSentRef.current = true;
+        fetch('https://aida.smit34.ru/api/voice-create-ticket', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, phone, address: addr, problem, tariff, source: 'robor' }),
+        })
+          .then((r) => r.json())
+          .then((d) => console.log('[handleDrop] ticket result:', d))
+          .catch((e) => console.error('[handleDrop] ticket error:', e));
+      }
+      voiceTranscriptRef.current = [];
       cleanupVoice();
       setVoiceStatus('error');
       setVoiceError(msg);
@@ -319,7 +612,7 @@ const GeminiChat: React.FC = () => {
       streamRef.current = stream;
       if (activeConnectionIdRef.current !== connectionId) return;
 
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const ai = new GoogleGenAI({ apiKey: _geminiApiKey, httpOptions: { baseUrl: 'https://aida.smit34.ru' } });
       let sessionPromise: Promise<any>;
 
       const callbacks = {
@@ -354,28 +647,78 @@ const GeminiChat: React.FC = () => {
             return;
           }
 
+          // Fix Gemini encoding: UTF-8 bytes misread as Latin-1
+          const fixEnc = (t: string | undefined): string | undefined => {
+            if (!t) return t;
+            if (/[\u00C0-\u00FF]/.test(t)) {
+              try {
+                const b = new Uint8Array(t.length);
+                for (let i = 0; i < t.length; i++) b[i] = t.charCodeAt(i);
+                const d = new TextDecoder('utf-8').decode(b);
+                if (/[\u0430-\u044F\u0410-\u042F\u0451\u0401]/.test(d)) return d;
+              } catch {}
+            }
+            return t;
+          };
+
+          // Clean voice transcript: merge broken fragments, fix spacing
+          const cleanTranscript = (t: string): string => {
+            if (!t) return t;
+            let s = t;
+            s = s.replace(/\s+/g, ' ');
+            s = s.replace(/\s+([,.:;!?])/g, '$1');
+            // Merge broken Cyrillic word fragments
+            for (let i = 0; i < 5; i++) {
+              s = s.replace(/([а-яА-ЯёЁ]) ([а-яёЁ]{1,2}) (?=[а-яА-ЯёЁ])/g, '$1$2');
+              s = s.replace(/([а-яА-ЯёЁ]{1,2}) ([а-яёЁ]{1,3})(?=[\s,.:;!?]|$)/g, (m: string, a: string, b: string) => {
+                if ((a.length + b.length) <= 2) return m;
+                return a + b;
+              });
+            }
+            // Common address words fix
+            s = s.replace(/\bгор\s*о?\s*д\b/gi, 'город');
+            s = s.replace(/\bул\s+и\s*ц/gi, 'улиц');
+            s = s.replace(/\bдо\s+м\b/gi, 'дом');
+            s = s.replace(/\bкв\s*а?\s*рт\s*и?\s*р/gi, 'квартир');
+            s = s.replace(/\bко\s*рп\s*ус/gi, 'корпус');
+            s = s.replace(/\bпо\s*д\s*ъ?\s*е\s*зд/gi, 'подъезд');
+            s = s.replace(/\bэ\s*та\s*ж/gi, 'этаж');
+            s = s.replace(/\bте\s*ле\s*фо\s*н/gi, 'телефон');
+            s = s.replace(/\bин\s*те\s*рн\s*е\s*т/gi, 'интернет');
+            s = s.replace(/\bпр\s*о\s*бл\s*е\s*м/gi, 'проблем');
+            s = s.replace(/\bа\s*д\s*ре\s*с/gi, 'адрес');
+            s = s.replace(/\bВо\s*лг\s*о?\s*гр\s*а\s*д/gi, 'Волгоград');
+            s = s.replace(/\bВо\s*лж\s*ск/gi, 'Волжск');
+            s = s.replace(/(\d+)\.\s*$/g, '$1');
+            s = s.replace(/\.\s*$/, '');
+            return s.trim();
+          };
+
           // User speech — accumulate in one bubble
-          const inputText: string | undefined = message.serverContent?.inputTranscription?.text;
+          const inputText: string | undefined = fixEnc(message.serverContent?.inputTranscription?.text);
           if (inputText?.trim()) {
-            userInputAccumulatorRef.current += (userInputAccumulatorRef.current ? ' ' : '') + inputText.trim();
-            const acc = userInputAccumulatorRef.current;
-            setMessages((prev) => {
-              const last = prev[prev.length - 1];
-              if (last?.role === 'user' && last.text.startsWith('🎤')) {
-                return [...prev.slice(0, -1), { role: 'user', text: `🎤 ${acc}` }];
-              }
-              return [...prev, { role: 'user', text: `🎤 ${acc}` }];
-            });
+            // Concatenate without forced space — Gemini includes natural spacing
+            userInputAccumulatorRef.current += inputText;
+            const acc = cleanTranscript(userInputAccumulatorRef.current);
+            if (acc) {
+              setMessages((prev) => {
+                const last = prev[prev.length - 1];
+                if (last?.role === 'user' && last.text.startsWith('🎤')) {
+                  return [...prev.slice(0, -1), { role: 'user', text: `🎤 ${acc}` }];
+                }
+                return [...prev, { role: 'user', text: `🎤 ${acc}` }];
+              });
+            }
           }
 
           // AI output transcript — accumulate until turnComplete
-          const outputText: string | undefined = message.serverContent?.outputTranscription?.text;
+          const outputText: string | undefined = fixEnc(message.serverContent?.outputTranscription?.text);
           if (outputText?.trim()) voiceCurrentBotRef.current += outputText;
 
           // Turn complete — commit to transcript
           if (message.serverContent?.turnComplete) {
             if (userInputAccumulatorRef.current) {
-              voiceTranscriptRef.current.push({ role: 'user', text: userInputAccumulatorRef.current });
+              voiceTranscriptRef.current.push({ role: 'user', text: cleanTranscript(userInputAccumulatorRef.current) });
               userInputAccumulatorRef.current = '';
             }
             if (voiceCurrentBotRef.current.trim()) {
@@ -391,9 +734,10 @@ const GeminiChat: React.FC = () => {
           if (b64Audio && audioContextRef.current) {
             setIsAgentSpeaking(true);
             const ctx = audioContextRef.current;
-            const startAt = Math.max(nextStartTimeRef.current, ctx.currentTime);
-            nextStartTimeRef.current = startAt;
             const audioBuf = await decodeAudioData(base64Decode(b64Audio), ctx, 24000);
+            // Reserve slot in the timeline before any other chunk can claim it
+            const startAt = Math.max(nextStartTimeRef.current, ctx.currentTime + 0.02);
+            nextStartTimeRef.current = startAt + audioBuf.duration;
             const src = ctx.createBufferSource();
             src.buffer = audioBuf;
             src.connect(ctx.destination);
@@ -402,7 +746,6 @@ const GeminiChat: React.FC = () => {
               if (sourcesRef.current.size === 0) setIsAgentSpeaking(false);
             };
             src.start(startAt);
-            nextStartTimeRef.current += audioBuf.duration;
             sourcesRef.current.add(src);
           }
         },
@@ -422,26 +765,46 @@ const GeminiChat: React.FC = () => {
           },
           inputAudioTranscription: {},
           outputAudioTranscription: {},
-          systemInstruction: `Ты — голосовой консультант интернет-провайдера РоборНЭТ (ООО «РОБОР») в Волгограде. Твоё имя — Алексей.
+          systemInstruction: `ЯЗЫК: русский (ru-RU). Все клиенты говорят по-русски. Отвечай ТОЛЬКО на русском языке.
+
+Ты — голосовой консультант интернет-провайдера РоборНЭТ (ООО «РОБОР») в Волгограде. Твоё имя — Алексей.
 
 ТВОЯ ЗАДАЧА: помогать клиентам с выбором тарифа, консультировать по услугам, принимать заявки на подключение.
 
 ТАРИФЫ (ИСПОЛЬЗУЙ ТОЛЬКО ЭТИ!):
 ${TARIFFS.map((t) => `- «${t.name}» — ${t.speed} Мбит/с, ${t.price} руб/мес${t.tvChannels ? `, ТВ: ${t.tvChannels}` : ''}${t.isWireless ? ' (беспроводной, для частного сектора)' : ''}`).join('\n')}
 
-КОНТАКТЫ:
-- Телефон: ${CONTACTS.phoneShort}
-- Адрес офиса: ${CONTACTS.address}
-- График: ${CONTACTS.workingHours}
+🚫 КАТЕГОРИЧЕСКИЕ ЗАПРЕТЫ:
+- НЕЛЬЗЯ спрашивать "физическое лицо или компания" — РоборНЭТ работает ТОЛЬКО с физлицами!
+- НЕЛЬЗЯ спрашивать про юрлицо, ИП, ООО, бизнес — это НЕ наш профиль!
+- НЕЛЬЗЯ спрашивать дату и время подключения — менеджер сам назначит!
+- НЕЛЬЗЯ называть телефон компании, адрес офиса или график работы
+- НЕЛЬЗЯ спрашивать 2 вопроса в одном сообщении
+
+ПОРЯДОК ОФОРМЛЕНИЯ ЗАЯВКИ НА ПОДКЛЮЧЕНИЕ:
+1. Поздоровайся и спроси, чем помочь
+2. Узнай потребности (для чего нужен интернет)
+3. Рекомендуй подходящий тариф
+4. Спроси АДРЕС (только адрес)
+5. Уточни: квартира или частный дом?
+6. Спроси нужен ли роутер
+7. Спроси ТЕЛЕФОН (только телефон)
+8. Спроси ИМЯ (только имя)
+9. Подтверди в формате: "Имя: [имя], Телефон: [телефон], Адрес: [адрес], Тариф: «[тариф]». Всё верно?"
 
 ПРАВИЛА ОБЩЕНИЯ:
 - Говори на русском языке, кратко и по делу
 - Будь дружелюбным и профессиональным
 - Представляйся: "Добрый день! Я Алексей, консультант РоборНЭТ."
-- Сначала узнай имя клиента и его потребности
-- Рекомендуй подходящий тариф исходя из потребностей
-- Если клиент хочет подключиться — ОБЯЗАТЕЛЬНО узнай: имя, номер телефона, адрес подключения
-- В конце СТРОГО подтверди детали в формате: "Имя: [имя], Телефон: [телефон], Адрес: [адрес], Тариф: «[тариф]». Всё верно?"`,
+- ГЛАВНОЕ ПРАВИЛО: ОДИН ВОПРОС ЗА РАЗ — задай вопрос, жди ответ, потом следующий
+- Если клиент назвал адрес без города — уточни: "Это в Волгограде?"
+
+ЕСЛИ КЛИЕНТ ЖАЛУЕТСЯ (не работает, проблема, сломалось):
+1. Посочувствуй кратко
+2. Спроси ИМЯ (только имя)
+3. Спроси ТЕЛЕФОН (только телефон)
+4. Спроси в чём проблема (если не сказал)
+5. Подтверди: "Имя: [имя], Телефон: [телефон], Проблема: [описание]. Создаю обращение в поддержку, всё верно?"`,
         },
       });
 
@@ -599,22 +962,53 @@ ${TARIFFS.map((t) => `- «${t.name}» — ${t.speed} Мбит/с, ${t.price} р�
               className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0"
             >
               {messages.map((m, i) => (
-                <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div
-                    style={{
-                      maxWidth: '85%',
-                      padding: '10px 14px',
-                      borderRadius: m.role === 'user' ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
-                      fontSize: '14px',
-                      backgroundColor: m.role === 'user' ? '#00D4FF' : isDark ? '#1e293b' : '#ffffff',
-                      color: m.role === 'user' ? '#0f172a' : isDark ? '#e2e8f0' : '#334155',
-                      border: m.role === 'user' ? 'none' : isDark ? '1px solid rgba(255,255,255,0.06)' : '1px solid #e2e8f0',
-                      boxShadow: m.role === 'user' ? 'none' : isDark ? 'none' : '0 1px 3px rgba(0,0,0,0.06)',
-                      fontWeight: m.role === 'user' ? 700 : 400,
-                    }}
-                  >
-                    <MessageContent text={m.text} />
+                <div key={i}>
+                  <div className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    <div
+                      style={{
+                        maxWidth: '85%',
+                        padding: '10px 14px',
+                        borderRadius: m.role === 'user' ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
+                        fontSize: '14px',
+                        backgroundColor: m.role === 'user' ? '#00D4FF' : isDark ? '#1e293b' : '#ffffff',
+                        color: m.role === 'user' ? '#0f172a' : isDark ? '#e2e8f0' : '#334155',
+                        border: m.role === 'user' ? 'none' : isDark ? '1px solid rgba(255,255,255,0.06)' : '1px solid #e2e8f0',
+                        boxShadow: m.role === 'user' ? 'none' : isDark ? 'none' : '0 1px 3px rgba(0,0,0,0.06)',
+                        fontWeight: m.role === 'user' ? 700 : 400,
+                      }}
+                    >
+                      <MessageContent text={m.text} onSuggestionClick={sendMessage} isDark={isDark} />
+                    </div>
                   </div>
+                  {/* Geo button — shown after last model message that asks for address, on mobile */}
+                  {m.role === 'model' && i === messages.length - 1 && isMobile() && checkAddressQuestion(m.text) && (
+                    <div style={{ display: 'flex', justifyContent: 'flex-start', marginTop: '6px' }}>
+                      <button
+                        onClick={() => handleGeoDetect(i)}
+                        disabled={geoStatus === 'loading'}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          padding: '6px 14px',
+                          background: geoStatus === 'done' ? '#22c55e' : isDark ? 'rgba(0,212,255,0.15)' : 'rgba(0,212,255,0.1)',
+                          color: geoStatus === 'done' ? '#fff' : '#00D4FF',
+                          border: '1px solid ' + (geoStatus === 'done' ? '#22c55e' : 'rgba(0,212,255,0.3)'),
+                          borderRadius: '18px',
+                          fontSize: '13px',
+                          fontWeight: 600,
+                          cursor: geoStatus === 'loading' ? 'wait' : 'pointer',
+                          opacity: geoStatus === 'loading' ? 0.7 : 1,
+                          transition: 'all 0.2s',
+                        }}
+                      >
+                        {geoStatus === 'loading' && geoMessageIdx === i ? '⏳ Поиск...' :
+                         geoStatus === 'done' && geoMessageIdx === i ? '✅ Адрес определён' :
+                         geoStatus === 'error' && geoMessageIdx === i ? '🔄 Повторить' :
+                         '📍 Определить адрес'}
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
               {isLoading && (
@@ -692,17 +1086,36 @@ ${TARIFFS.map((t) => `- «${t.name}» — ${t.speed} Мбит/с, ${t.price} р�
               }}
             >
               <input
+                ref={inputRef}
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && sendMessage(input)}
-                placeholder="Задайте вопрос..."
+                type={phoneMode ? 'tel' : 'text'}
+                onChange={phoneMode ? (e) => {
+                  const digits = extractPhoneDigits(e.target.value);
+                  setInput(formatPhone(digits));
+                } : (e) => setInput(e.target.value)}
+                onKeyDown={phoneMode ? (e) => {
+                  if (['Backspace','Delete','ArrowLeft','ArrowRight','Tab','Enter'].includes(e.key)) {
+                    if (e.key === 'Backspace') {
+                      const digits = extractPhoneDigits(input);
+                      if (digits.length === 0) { e.preventDefault(); return; }
+                    }
+                    if (e.key === 'Enter') sendMessage(input);
+                    return;
+                  }
+                  if (e.ctrlKey || e.metaKey) return;
+                  if (!/^\d$/.test(e.key)) { e.preventDefault(); return; }
+                  if (extractPhoneDigits(input).length >= 10) e.preventDefault();
+                } : (e) => { if (e.key === 'Enter') sendMessage(input); }}
+                placeholder={phoneMode ? '+7(___) ___-__-__' : 'Задайте вопрос...'}
                 style={{
                   flex: 1,
                   backgroundColor: isDark ? '#1e293b' : '#f1f5f9',
                   border: isDark ? '1px solid rgba(255,255,255,0.1)' : '1px solid #e2e8f0',
                   borderRadius: '12px',
                   padding: '10px 14px',
-                  fontSize: '14px',
+                  fontSize: phoneMode ? '16px' : '14px',
+                  fontFamily: phoneMode ? "'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace" : 'inherit',
+                  letterSpacing: phoneMode ? '0.5px' : 'normal',
                   color: isDark ? '#f1f5f9' : '#1e293b',
                   outline: 'none',
                 }}
@@ -757,7 +1170,7 @@ ${TARIFFS.map((t) => `- «${t.name}» — ${t.speed} Мбит/с, ${t.price} р�
                         fontWeight: m.role === 'user' ? 700 : 400,
                       }}
                     >
-                      {m.text}
+                      <MessageContent text={m.text} />
                     </div>
                   </div>
                 ))}
