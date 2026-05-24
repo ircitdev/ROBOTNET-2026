@@ -1,9 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { FAQ } from './constants';
-import { TARIFFS } from './tariffsData';
-import { NEWS_DATA } from './news';
 import { NewsItem } from './types';
+import { useLiveContent } from './utils/useLiveContent';
 import { CHANNELS_DATA } from './channels';
 import ThreeHero from './components/ThreeHero';
 import GeminiChat, { toggleGeminiChat } from './components/GeminiChat';
@@ -42,6 +40,7 @@ const FAQItem: React.FC<{ question: string; answer: string; isOpen: boolean; onC
 };
 
 const App: React.FC = () => {
+  const { tariffs: TARIFFS, news: NEWS_DATA, faq: FAQ } = useLiveContent();
   const [isDark, setIsDark] = useState(true);
   const [scrolled, setScrolled] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
