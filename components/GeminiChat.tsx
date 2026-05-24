@@ -312,6 +312,7 @@ const GeminiChat: React.FC = () => {
   const [voiceStatus, setVoiceStatus] = useState<'idle' | 'connecting' | 'connected' | 'error'>('idle');
   const [isAgentSpeaking, setIsAgentSpeaking] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [voiceErrorKind, setVoiceErrorKind] = useState<'denied' | 'notfound' | 'busy' | 'insecure' | 'unsupported' | 'other' | null>(null);
 
   // Refs
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -546,6 +547,41 @@ const GeminiChat: React.FC = () => {
   };
 
   // ============================
+  // Microphone preflight — explicit permission request with clear errors
+  // ============================
+  const requestMicrophone = async (): Promise<MediaStream> => {
+    // Insecure context (http://) blocks getUserMedia in modern browsers
+    if (!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+      const e: any = new Error('Голосовой режим доступен только по HTTPS');
+      e._kind = 'insecure';
+      throw e;
+    }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      const e: any = new Error('Браузер не поддерживает доступ к микрофону');
+      e._kind = 'unsupported';
+      throw e;
+    }
+    try {
+      return await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      });
+    } catch (err: any) {
+      const name = err?.name || '';
+      const e: any = new Error(err?.message || String(err));
+      if (name === 'NotAllowedError' || name === 'PermissionDeniedError' || name === 'SecurityError') {
+        e._kind = 'denied';
+      } else if (name === 'NotFoundError' || name === 'OverconstrainedError' || name === 'DevicesNotFoundError') {
+        e._kind = 'notfound';
+      } else if (name === 'NotReadableError' || name === 'TrackStartError' || name === 'AbortError') {
+        e._kind = 'busy';
+      } else {
+        e._kind = 'other';
+      }
+      throw e;
+    }
+  };
+
+  // ============================
   // VOICE connect
   // ============================
   const connectVoice = async () => {
@@ -555,6 +591,33 @@ const GeminiChat: React.FC = () => {
     setVoiceStatus('connecting');
     setIsVoiceActive(true);
     setVoiceError(null);
+    setVoiceErrorKind(null);
+
+    // 1) Запросить микрофон ПЕРВЫМ шагом — браузер покажет нативный диалог
+    let stream: MediaStream;
+    try {
+      stream = await requestMicrophone();
+    } catch (err: any) {
+      cleanupVoice();
+      setIsVoiceActive(false);
+      setVoiceStatus('error');
+      setVoiceErrorKind(err._kind || 'other');
+      const messages: Record<string, string> = {
+        denied: 'Вы запретили доступ к микрофону. Разрешите его в настройках сайта и нажмите «Повторить».',
+        notfound: 'Микрофон не найден. Подключите устройство и нажмите «Повторить».',
+        busy: 'Микрофон занят другим приложением. Закройте его и нажмите «Повторить».',
+        insecure: 'Голосовой режим доступен только по HTTPS.',
+        unsupported: 'Ваш браузер не поддерживает доступ к микрофону. Используйте Chrome, Edge или Safari.',
+        other: 'Не удалось получить доступ к микрофону. Попробуйте снова.',
+      };
+      setVoiceError(messages[err._kind] || messages.other);
+      return;
+    }
+    if (activeConnectionIdRef.current !== connectionId) {
+      stream.getTracks().forEach((t) => t.stop());
+      return;
+    }
+    streamRef.current = stream;
 
     const handleDrop = (msg: string) => {
       if (activeConnectionIdRef.current !== connectionId && activeConnectionIdRef.current !== null) return;
@@ -608,10 +671,6 @@ const GeminiChat: React.FC = () => {
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
       audioContextRef.current = new AudioCtx({ sampleRate: 24000 });
       inputContextRef.current = new AudioCtx({ sampleRate: 16000 });
-
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current = stream;
-      if (activeConnectionIdRef.current !== connectionId) return;
 
       const ai = new GoogleGenAI({ apiKey: _geminiApiKey, httpOptions: { baseUrl: 'https://aida.smit34.ru' } });
       let sessionPromise: Promise<any>;
@@ -826,13 +885,16 @@ ${TARIFFS.map((t) => `- «${t.name}» — ${t.speed} Мбит/с, ${t.price} р�
       cleanupVoice();
       setIsVoiceActive(false);
       setVoiceStatus('error');
-      setVoiceError(err.name === 'NotAllowedError' ? 'Нет доступа к микрофону' : 'Ошибка: ' + err.message);
+      setVoiceErrorKind('other');
+      setVoiceError('Ошибка подключения: ' + (err?.message || String(err)).slice(0, 120));
     }
   };
 
   useEffect(() => () => cleanupVoice(), []);
 
-  // Auto voice greeting — opens voice chat 60s after page load (once per day)
+  // Auto voice greeting — opens widget on voice tab 60s after page load (once per day).
+  // Microphone is NOT requested automatically: browsers block getUserMedia without a user gesture,
+  // so we just open the panel and wait for the user to tap "Начать разговор".
   useEffect(() => {
     const today = new Date().toDateString();
     if (localStorage.getItem(VOICE_GREETED_KEY) === today) return;
@@ -841,7 +903,6 @@ ${TARIFFS.map((t) => `- «${t.name}» — ${t.speed} Мбит/с, ${t.price} р�
       localStorage.setItem(VOICE_GREETED_KEY, today);
       setIsOpen(true);
       setMode('voice');
-      setTimeout(() => connectVoice(), 600);
     }, 60_000);
 
     return () => clearTimeout(timer);
@@ -1199,9 +1260,32 @@ ${TARIFFS.map((t) => `- «${t.name}» — ${t.speed} Мбит/с, ${t.price} р�
                   </p>
                 )}
                 {voiceStatus === 'error' && (
-                  <div className="flex flex-col items-center gap-2 text-red-500 px-6 text-center">
-                    <span className="text-xs font-bold uppercase tracking-widest">Ошибка</span>
-                    <span className="text-sm">{voiceError}</span>
+                  <div className="flex flex-col items-center gap-3 px-6 text-center" style={{ maxWidth: '320px' }}>
+                    <div style={{
+                      width: 48, height: 48, borderRadius: '50%',
+                      backgroundColor: 'rgba(239,68,68,0.12)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      <svg width="24" height="24" fill="none" stroke="#ef4444" strokeWidth="2" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m-4 0h8M5 5l14 14M12 8a3 3 0 00-3 3v2" />
+                      </svg>
+                    </div>
+                    <span className="text-xs font-bold uppercase tracking-widest" style={{ color: '#ef4444' }}>
+                      {voiceErrorKind === 'denied' ? 'Доступ запрещён' :
+                       voiceErrorKind === 'notfound' ? 'Микрофон не найден' :
+                       voiceErrorKind === 'busy' ? 'Микрофон занят' :
+                       voiceErrorKind === 'insecure' ? 'Требуется HTTPS' :
+                       voiceErrorKind === 'unsupported' ? 'Не поддерживается' :
+                       'Ошибка'}
+                    </span>
+                    <span className="text-sm" style={{ color: isDark ? '#cbd5e1' : '#475569', lineHeight: 1.5 }}>
+                      {voiceError}
+                    </span>
+                    {voiceErrorKind === 'denied' && (
+                      <span className="text-xs" style={{ color: isDark ? '#94a3b8' : '#64748b', lineHeight: 1.5 }}>
+                        Нажмите на иконку замка в адресной строке → «Микрофон» → «Разрешить», затем обновите страницу.
+                      </span>
+                    )}
                   </div>
                 )}
               </div>
