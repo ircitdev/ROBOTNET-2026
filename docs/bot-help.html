@@ -1,0 +1,503 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0f172a">
+<title>Документация бота · РоборНЭТ AI</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#111c34; --panel-2:#162241;
+    --text:#e2e8f0; --muted:#94a3b8; --border:rgba(255,255,255,.08);
+    --accent:#00D4FF; --accent-2:#2ECC71; --warn:#FF4757;
+    --code-bg:#0b1428; --code-text:#cdd9e5;
+    --shadow:0 10px 30px rgba(0,212,255,.08);
+  }
+  *,*::before,*::after{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+  a{color:var(--accent);text-decoration:none}
+  a:hover{text-decoration:underline}
+  code{background:var(--code-bg);color:var(--code-text);padding:2px 6px;border-radius:6px;font:13px/1.4 ui-monospace,"SF Mono",Menlo,Consolas,monospace;border:1px solid var(--border)}
+  pre{background:var(--code-bg);padding:14px;border-radius:10px;overflow:auto;border:1px solid var(--border)}
+  pre code{background:transparent;border:0;padding:0}
+  hr{border:none;border-top:1px solid var(--border);margin:24px 0}
+  ul,ol{padding-left:22px;margin:10px 0}
+  li{margin:4px 0}
+  h1,h2,h3,h4{font-family:Montserrat,Inter,sans-serif;letter-spacing:-.01em;line-height:1.25;margin:0 0 12px}
+  h1{font-size:24px;font-weight:800}
+  h2{font-size:20px;font-weight:800;margin-top:32px}
+  h3{font-size:17px;font-weight:700;margin-top:24px}
+  h4{font-size:14px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-top:18px}
+
+  /* === Layout === */
+  .app{max-width:880px;margin:0 auto;padding:env(safe-area-inset-top) 16px env(safe-area-inset-bottom)}
+  .hero{padding:24px 0 8px;text-align:center;border-bottom:1px solid var(--border)}
+  .hero .badge{display:inline-block;font:600 11px/1.4 system-ui;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);background:rgba(0,212,255,.1);padding:6px 12px;border-radius:99px;margin-bottom:10px}
+  .hero h1{font-size:26px;margin-bottom:6px}
+  .hero p{color:var(--muted);margin:0 0 14px}
+
+  .toolbar{position:sticky;top:0;z-index:10;background:linear-gradient(180deg,var(--bg) 80%,transparent);padding:14px 0 10px;display:flex;gap:8px}
+  .search{flex:1;display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:10px 12px}
+  .search svg{flex-shrink:0;opacity:.55}
+  .search input{flex:1;background:transparent;border:0;color:var(--text);outline:none;font-size:15px}
+  .search input::placeholder{color:var(--muted)}
+  .pill{display:inline-flex;align-items:center;gap:6px;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:8px 12px;color:var(--text);font-size:13px;cursor:pointer;user-select:none}
+  .pill:hover{border-color:var(--accent);color:var(--accent)}
+
+  nav.toc{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:14px 16px;margin:14px 0 24px;box-shadow:var(--shadow)}
+  nav.toc h4{color:var(--muted);margin:0 0 8px}
+  nav.toc ul{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:4px 14px}
+  nav.toc li{margin:0}
+  nav.toc a{display:block;padding:6px 0;color:var(--text);font-size:14px}
+  nav.toc a:hover{color:var(--accent)}
+
+  .section{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:18px 18px 6px;margin:14px 0;box-shadow:var(--shadow);scroll-margin-top:80px}
+  .section h2{display:flex;align-items:center;gap:10px;margin-top:0}
+  .section h2 .ico{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:9px;background:rgba(0,212,255,.12);color:var(--accent);font-size:16px}
+  .section.warn h2 .ico{background:rgba(255,71,87,.12);color:var(--warn)}
+  .section.ok h2 .ico{background:rgba(46,204,113,.14);color:var(--accent-2)}
+
+  .cmd{margin:14px 0;padding:14px;border-radius:11px;background:var(--panel-2);border:1px solid var(--border);scroll-margin-top:80px}
+  .cmd-head{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:8px}
+  .cmd-name{font:700 15px/1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;color:var(--accent);background:rgba(0,212,255,.08);border:1px solid rgba(0,212,255,.22);padding:6px 10px;border-radius:8px}
+  .cmd-title{font-weight:700;font-size:15px}
+  .cmd-tag{font:600 10px/1 system-ui;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);background:rgba(148,163,184,.08);padding:5px 8px;border-radius:6px;border:1px solid var(--border)}
+  .cmd-tag.admin{color:var(--warn);background:rgba(255,71,87,.08);border-color:rgba(255,71,87,.25)}
+  .cmd-tag.live{color:var(--accent-2);background:rgba(46,204,113,.08);border-color:rgba(46,204,113,.25)}
+  .cmd p{margin:6px 0}
+  .cmd .desc{color:var(--muted);font-size:14px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-top:8px}
+  .chip{display:inline-flex;align-items:center;gap:6px;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:13px;color:var(--text)}
+
+  .callout{margin:14px 0;padding:14px;border-radius:11px;border:1px solid var(--border);background:rgba(0,212,255,.05);display:flex;gap:12px;align-items:flex-start}
+  .callout.warn{background:rgba(255,71,87,.05);border-color:rgba(255,71,87,.18)}
+  .callout .ico{flex-shrink:0;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;border-radius:7px;background:rgba(0,212,255,.12);color:var(--accent)}
+  .callout.warn .ico{background:rgba(255,71,87,.12);color:var(--warn)}
+  .callout p{margin:0}
+
+  table{width:100%;border-collapse:collapse;font-size:14px;margin:8px 0}
+  th,td{padding:9px 10px;text-align:left;border-bottom:1px solid var(--border)}
+  th{color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.06em}
+
+  .footer{padding:24px 0 40px;text-align:center;color:var(--muted);font-size:12px}
+  .footer a{color:var(--muted)}
+  .hide{display:none!important}
+
+  @media(max-width:520px){
+    .app{padding-left:12px;padding-right:12px}
+    .hero h1{font-size:22px}
+    nav.toc ul{grid-template-columns:1fr 1fr}
+  }
+  /* Telegram WebApp theme override (best-effort) */
+  body.tg-light{--bg:#fff;--panel:#f8fafc;--panel-2:#f1f5f9;--text:#0f172a;--muted:#64748b;--border:rgba(15,23,42,.08);--code-bg:#f1f5f9;--code-text:#1e293b}
+</style>
+</head>
+<body>
+<div class="app">
+
+<header class="hero">
+  <span class="badge">⚡ РоборНЭТ AI · Документация</span>
+  <h1>Управляющий бот <code>@Smit34AIAssistant_bot</code></h1>
+  <p>Полный справочник по командам, разделам и сценариям использования.</p>
+</header>
+
+<div class="toolbar">
+  <label class="search" aria-label="Поиск по командам">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+    <input id="q" type="search" placeholder="Поиск команды или раздела…" autocomplete="off">
+  </label>
+  <span class="pill" id="expandAll" title="Раскрыть всё">📂 Все</span>
+</div>
+
+<nav class="toc" aria-label="Содержание">
+  <h4>📚 Содержание</h4>
+  <ul>
+    <li><a href="#core">Базовые команды</a></li>
+    <li><a href="#admin">Меню администратора</a></li>
+    <li><a href="#robornet">Управление robornet.ru</a></li>
+    <li><a href="#smit">Управление smit34.ru</a></li>
+    <li><a href="#gpt">AI-ассистент</a></li>
+    <li><a href="#utm">UTM-конструктор</a></li>
+    <li><a href="#reports">Отчёты</a></li>
+    <li><a href="#cache">Кэш и синхронизация</a></li>
+    <li><a href="#checks">Проверки клиента</a></li>
+    <li><a href="#promo">Всплывающее окно</a></li>
+    <li><a href="#faq">Частые вопросы</a></li>
+  </ul>
+</nav>
+
+<!-- ===== BASIC ===== -->
+<section class="section" id="core">
+  <h2><span class="ico">🚀</span> Базовые команды</h2>
+
+  <div class="cmd" id="cmd-start">
+    <div class="cmd-head">
+      <span class="cmd-name">/start</span>
+      <span class="cmd-title">Стартовый экран</span>
+      <span class="cmd-tag">всем</span>
+    </div>
+    <p class="desc">Показывает приветствие с обложкой и перечислением всех доступных команд. Удобно как «карта» бота для нового пользователя.</p>
+  </div>
+
+  <div class="cmd" id="cmd-help">
+    <div class="cmd-head">
+      <span class="cmd-name">/help</span>
+      <span class="cmd-title">Краткая справка + кнопка «Документация»</span>
+      <span class="cmd-tag">всем</span>
+    </div>
+    <p class="desc">Выводит текстовую шпаргалку по командам и инлайн-кнопку «📖 Документация», которая открывает эту самую страницу как Telegram Mini App — внутри Telegram, без переключения приложений.</p>
+  </div>
+
+  <div class="cmd" id="cmd-status">
+    <div class="cmd-head">
+      <span class="cmd-name">/status</span>
+      <span class="cmd-title">Состояние кэшей</span>
+      <span class="cmd-tag">всем</span>
+    </div>
+    <p class="desc">Показывает актуальность кэшей тарифов и доп. услуг, количество элементов и время последнего обновления.</p>
+  </div>
+</section>
+
+<!-- ===== ADMIN ===== -->
+<section class="section" id="admin">
+  <h2><span class="ico">👤</span> Меню администратора</h2>
+  <div class="cmd" id="cmd-admin">
+    <div class="cmd-head">
+      <span class="cmd-name">/admin</span>
+      <span class="cmd-title">Главное административное меню</span>
+      <span class="cmd-tag admin">админ</span>
+    </div>
+    <p class="desc">Точка входа во все управляющие функции бота. Доступ только для аккаунтов из allowlist.</p>
+  </div>
+  <div class="callout">
+    <span class="ico">ℹ️</span>
+    <p>Если команды <code>/admin</code>, <code>/smit</code>, <code>/robornet</code> или <code>/gpt</code> не отвечают — у вашего Telegram-аккаунта нет прав администратора. Обратитесь к ответственному за бота.</p>
+  </div>
+</section>
+
+<!-- ===== ROBORNET ===== -->
+<section class="section" id="robornet">
+  <h2><span class="ico">🌐</span> Управление robornet.ru</h2>
+
+  <div class="cmd" id="cmd-robornet">
+    <div class="cmd-head">
+      <span class="cmd-name">/robornet</span>
+      <span class="cmd-title">Главное меню robornet.ru</span>
+      <span class="cmd-tag admin">админ</span>
+      <span class="cmd-tag live">live</span>
+    </div>
+    <p class="desc">Из главного меню доступны: тарифы, новости, FAQ, всплывающее окно, статистика Яндекс.Метрики и быстрый переход на сайт. Все изменения попадают на сайт сразу после нажатия F5.</p>
+
+    <h4>Тарифы</h4>
+    <ul>
+      <li>Добавление, удаление, скрытие/показ тарифа</li>
+      <li>Редактирование полей: название, цена, скорость, ТВ-каналы, тип (квартира/частный дом), текст кнопки</li>
+      <li>Отметка «хит» — выделяет тариф рамкой на сайте</li>
+    </ul>
+
+    <h4>Новости</h4>
+    <ul>
+      <li>Создание/удаление/скрытие новости</li>
+      <li>Поля: заголовок, короткое описание, полный текст, тег (важно/акция/инфо/ТВ/безопасность/лайфхак)</li>
+      <li>Цвет тега подбирается автоматически по типу</li>
+    </ul>
+
+    <h4>FAQ</h4>
+    <ul>
+      <li>Управление парами «вопрос — ответ»</li>
+      <li>Скрытие отдельного вопроса без удаления</li>
+    </ul>
+
+    <h4>🪟 Всплывающее окно (promo)</h4>
+    <ul>
+      <li>Включение/выключение модалки одной кнопкой</li>
+      <li>Редактирование: заголовок, бейдж, описание, обе кнопки</li>
+      <li>Задержка показа — в секундах (0–600); сайт пересчитывает в миллисекунды</li>
+      <li>Подробнее — см. раздел <a href="#promo">«Всплывающее окно»</a></li>
+    </ul>
+
+    <h4>📊 Статистика сайта</h4>
+    <ul>
+      <li>Источник: Яндекс.Метрика (счётчик 107083389)</li>
+      <li>Периоды: сегодня · 7 дней · 30 дней</li>
+      <li>Показатели: визиты, посетители, просмотры, отказы, среднее время</li>
+      <li>Топ-5 источников трафика с иконкой типа</li>
+    </ul>
+  </div>
+
+  <div class="callout">
+    <span class="ico">⚡</span>
+    <p>Контент хранится в файлах <code>/var/www/robornet/{tariffs,news,faq,promo}.json</code> на сервере. Сайт читает их при загрузке (с заголовком <code>Cache-Control: no-cache</code>), поэтому деплой/ребилд не требуется.</p>
+  </div>
+</section>
+
+<!-- ===== SMIT ===== -->
+<section class="section" id="smit">
+  <h2><span class="ico">🏢</span> Управление smit34.ru</h2>
+  <div class="cmd" id="cmd-smit">
+    <div class="cmd-head">
+      <span class="cmd-name">/smit</span>
+      <span class="cmd-title">Главное меню smit34.ru</span>
+      <span class="cmd-tag admin">админ</span>
+    </div>
+    <p class="desc">Управление контентом сайта smit34.ru — параллельно с robornet, в той же навигационной парадигме.</p>
+    <div class="grid">
+      <span class="chip">💰 Тарифы (дом/бизнес)</span>
+      <span class="chip">📰 Новости</span>
+      <span class="chip">🔧 Платные услуги</span>
+      <span class="chip">📦 Оборудование</span>
+      <span class="chip">📺 ТВ</span>
+      <span class="chip">🛡 Камеры (CCTV)</span>
+      <span class="chip">💻 Сервис (ПК)</span>
+      <span class="chip">🪟 Модальное окно</span>
+      <span class="chip">📊 Статистика</span>
+    </div>
+  </div>
+
+  <div class="cmd" id="cmd-modal">
+    <div class="cmd-head">
+      <span class="cmd-name">/modal</span>
+      <span class="cmd-title">Прямой вход в модалку smit34.ru</span>
+      <span class="cmd-tag admin">админ</span>
+    </div>
+    <p class="desc">Быстрый шорткат в управление всплывающим окном smit34.ru — без захода через основное меню.</p>
+  </div>
+
+  <div class="cmd" id="cmd-news">
+    <div class="cmd-head">
+      <span class="cmd-name">/news</span>
+      <span class="cmd-title">Прямой вход в новости smit34.ru</span>
+      <span class="cmd-tag admin">админ</span>
+    </div>
+    <p class="desc">Быстрый доступ к новостям smit34.ru, минуя главное меню.</p>
+  </div>
+</section>
+
+<!-- ===== GPT ===== -->
+<section class="section" id="gpt">
+  <h2><span class="ico">🤖</span> AI-ассистент</h2>
+  <div class="cmd" id="cmd-gpt">
+    <div class="cmd-head">
+      <span class="cmd-name">/gpt</span>
+      <span class="cmd-title">Меню AI-ассистента</span>
+      <span class="cmd-tag admin">админ</span>
+    </div>
+    <p class="desc">Подключение к внутреннему AI-движку AIDA для тестирования диалогов, проверки промптов и просмотра последних запросов клиентов.</p>
+  </div>
+</section>
+
+<!-- ===== UTM ===== -->
+<section class="section" id="utm">
+  <h2><span class="ico">🔗</span> UTM-конструктор</h2>
+  <div class="cmd" id="cmd-utm">
+    <div class="cmd-head">
+      <span class="cmd-name">/utm_builder</span>
+      <span class="cmd-title">Создание UTM-ссылок</span>
+      <span class="cmd-tag">всем</span>
+    </div>
+    <p class="desc">Пошаговое создание корректной маркетинговой ссылки: <code>utm_source</code>, <code>utm_medium</code>, <code>utm_campaign</code>, <code>utm_content</code>, <code>utm_term</code>. На выходе — готовая ссылка для копирования, плюс она сразу укорачивается.</p>
+  </div>
+</section>
+
+<!-- ===== REPORTS ===== -->
+<section class="section" id="reports">
+  <h2><span class="ico">📊</span> Отчёты</h2>
+
+  <div class="cmd" id="cmd-ticketreport">
+    <div class="cmd-head">
+      <span class="cmd-name">/ticketreport</span>
+      <span class="cmd-title">Отчёт по тикетам и лидам</span>
+      <span class="cmd-tag admin">админ</span>
+    </div>
+    <p class="desc">Сводка по обращениям клиентов в поддержку и лидам с сайта. Периоды: вчера · неделя · месяц · квартал.</p>
+  </div>
+
+  <div class="cmd" id="cmd-connreport">
+    <div class="cmd-head">
+      <span class="cmd-name">/connreport</span>
+      <span class="cmd-title">Отчёт по подключениям</span>
+      <span class="cmd-tag admin">админ</span>
+    </div>
+    <p class="desc">Сколько новых подключений оформлено за период. Периоды: вчера · неделя · месяц · квартал.</p>
+  </div>
+
+  <div class="cmd" id="cmd-botreport">
+    <div class="cmd-head">
+      <span class="cmd-name">/botreport</span>
+      <span class="cmd-title">Качество работы бота</span>
+      <span class="cmd-tag admin">админ</span>
+    </div>
+    <p class="desc">Метрики качества диалогов AI-консультанта: успешные сценарии, обрывы, длина переписки, эскалации к менеджеру.</p>
+  </div>
+
+  <div class="cmd" id="cmd-weeklyreport">
+    <div class="cmd-head">
+      <span class="cmd-name">/weeklyreport</span>
+      <span class="cmd-title">Еженедельная сводка</span>
+      <span class="cmd-tag admin">админ</span>
+    </div>
+    <p class="desc">Готовая HTML-сводка за прошедшую неделю — комбинация ключевых метрик из всех отчётов. Автоматически отправляется по cron, но можно запросить вручную.</p>
+  </div>
+</section>
+
+<!-- ===== CACHE ===== -->
+<section class="section" id="cache">
+  <h2><span class="ico">🔄</span> Кэш и синхронизация</h2>
+
+  <div class="cmd" id="cmd-clearcache">
+    <div class="cmd-head">
+      <span class="cmd-name">/clearcache</span>
+      <span class="cmd-title">Очистить и обновить кэш тарифов</span>
+      <span class="cmd-tag admin">админ</span>
+    </div>
+    <p class="desc">Принудительно сбрасывает локальный кэш тарифов и сразу же подгружает свежие данные из биллинга. По завершении — уведомление в служебный топик.</p>
+  </div>
+
+  <div class="cmd" id="cmd-resetcash">
+    <div class="cmd-head">
+      <span class="cmd-name">/resetcash</span>
+      <span class="cmd-title">Сбросить все кэши целиком</span>
+      <span class="cmd-tag admin">админ</span>
+    </div>
+    <p class="desc">Аналогично <code>/clearcache</code>, но затрагивает не только тарифы, а все кэши, которыми пользуется AI-консультант.</p>
+  </div>
+
+  <div class="cmd" id="cmd-syncmontaj">
+    <div class="cmd-head">
+      <span class="cmd-name">/syncmontaj</span>
+      <span class="cmd-title">Синхронизация монтажников</span>
+      <span class="cmd-tag admin">админ</span>
+    </div>
+    <p class="desc">Подтягивает актуальный список монтажников из FreeScout в AmoCRM. Используется, когда в FreeScout добавили/удалили техника, а сделки нужно назначать корректно.</p>
+  </div>
+</section>
+
+<!-- ===== CHECKS ===== -->
+<section class="section" id="checks">
+  <h2><span class="ico">🔍</span> Проверки клиента</h2>
+
+  <div class="cmd" id="cmd-checkphone">
+    <div class="cmd-head">
+      <span class="cmd-name">/checkphone</span>
+      <span class="cmd-title">Поиск клиента по телефону</span>
+      <span class="cmd-tag admin">админ</span>
+    </div>
+    <p class="desc">Проверяет, есть ли уже договор с указанным номером — баланс, тариф, статус, последний платёж. Полезно перед оформлением «нового» подключения.</p>
+  </div>
+
+  <div class="cmd" id="cmd-checkadr">
+    <div class="cmd-head">
+      <span class="cmd-name">/checkadr</span>
+      <span class="cmd-title">Проверка адреса на возможность подключения</span>
+      <span class="cmd-tag admin">админ</span>
+    </div>
+    <p class="desc">Сверяет адрес с зоной покрытия. Возвращает: «технически возможно / есть готовая трасса / нужно выезд / не подключаем». Сразу видно, какой тариф можно предложить.</p>
+  </div>
+</section>
+
+<!-- ===== PROMO ===== -->
+<section class="section ok" id="promo">
+  <h2><span class="ico">🪟</span> Всплывающее окно robornet.ru</h2>
+  <p>Управляется в разделе «🌐 РоборНЭТ → 🪟 Всплывающее окно». Хранится в <code>promo.json</code>. Не требует пересборки сайта.</p>
+
+  <h3>Поля</h3>
+  <table>
+    <thead><tr><th>Поле</th><th>Где видно</th><th>Тип</th></tr></thead>
+    <tbody>
+      <tr><td><code>enabled</code></td><td>Если выкл — модалка не появится ни у кого</td><td>да/нет</td></tr>
+      <tr><td><code>title</code></td><td>Крупный заголовок в центре</td><td>текст</td></tr>
+      <tr><td><code>badge</code></td><td>Маленький бейдж сверху («Акция недели»)</td><td>текст до 30 символов</td></tr>
+      <tr><td><code>description</code></td><td>Основной абзац под заголовком</td><td>2–4 предложения</td></tr>
+      <tr><td><code>primaryButton</code></td><td>Цветная (главная) кнопка</td><td>1–3 слова</td></tr>
+      <tr><td><code>secondaryButton</code></td><td>Серая кнопка — открывает AI-чат</td><td>1–3 слова</td></tr>
+      <tr><td><code>delay</code></td><td>Через сколько секунд после загрузки появится</td><td>0–600 сек</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Как часто показывается</h3>
+  <p>Не чаще одного раза в сутки на одного посетителя — флаг хранится в <code>localStorage</code> браузера клиента. Если посетитель уже видел окно сегодня, оно не появится повторно, даже если делать F5.</p>
+</section>
+
+<!-- ===== FAQ ===== -->
+<section class="section" id="faq">
+  <h2><span class="ico">❓</span> Частые вопросы</h2>
+
+  <h3>Я отредактировал тариф, но на сайте всё по-старому</h3>
+  <ul>
+    <li>Откройте сайт «инкогнито» или нажмите <kbd>Ctrl</kbd>+<kbd>F5</kbd> — браузер мог закэшировать JS.</li>
+    <li>Проверьте: <a href="https://robornet.ru/tariffs.json" target="_blank" rel="noopener">https://robornet.ru/tariffs.json</a> — там должна быть ваша правка.</li>
+    <li>Если в JSON правка есть, но на сайте нет — это значит, что у клиента не сработал fetch. Сайт показывает fallback-данные из бандла. Подождите минуту и обновите страницу.</li>
+  </ul>
+
+  <h3>Бот не отвечает на команды</h3>
+  <ul>
+    <li>Проверьте, что бот запущен: системный сервис <code>aida-cache-bot.service</code> должен быть в состоянии <code>active</code>.</li>
+    <li>Возможно, ваш аккаунт не в списке администраторов — это объясняет, почему молчат именно <code>/admin</code>, <code>/smit</code>, <code>/robornet</code>.</li>
+  </ul>
+
+  <h3>Кто видит мои правки</h3>
+  <p>Все посетители сайта <a href="https://robornet.ru/" target="_blank" rel="noopener">https://robornet.ru/</a> сразу после первой перезагрузки. Изменения не требуют сборки или деплоя.</p>
+</section>
+
+<div class="footer">
+  © РоборНЭТ · Документация генерируется по фактическому коду бота · <a href="https://robornet.ru/" target="_blank" rel="noopener">robornet.ru</a>
+</div>
+
+</div>
+
+<script>
+  // Telegram WebApp glue
+  try{
+    const tg = window.Telegram && window.Telegram.WebApp;
+    if (tg){
+      tg.ready();
+      tg.expand();
+      // Apply Telegram theme — fall back to dark by default
+      const scheme = tg.colorScheme || 'dark';
+      if (scheme === 'light') document.body.classList.add('tg-light');
+      tg.onEvent('themeChanged', () => {
+        document.body.classList.toggle('tg-light', tg.colorScheme === 'light');
+      });
+      // Native close button at the top
+      tg.BackButton && tg.BackButton.hide();
+    }
+  }catch(e){}
+
+  // Search filter
+  const q = document.getElementById('q');
+  const cmds = Array.from(document.querySelectorAll('.cmd'));
+  const sections = Array.from(document.querySelectorAll('.section'));
+  q.addEventListener('input', () => {
+    const v = q.value.trim().toLowerCase();
+    if (!v){
+      cmds.forEach(c => c.classList.remove('hide'));
+      sections.forEach(s => s.classList.remove('hide'));
+      return;
+    }
+    cmds.forEach(c => {
+      const hit = c.textContent.toLowerCase().includes(v);
+      c.classList.toggle('hide', !hit);
+    });
+    // Скрыть секцию, если в ней не осталось ни одной видимой команды
+    sections.forEach(s => {
+      const liveCmds = s.querySelectorAll('.cmd:not(.hide)');
+      // Если у секции вообще нет .cmd (например, FAQ) — судим по text content
+      const hasCmds = s.querySelector('.cmd');
+      if (hasCmds){
+        s.classList.toggle('hide', liveCmds.length === 0 && !s.querySelector('h2').textContent.toLowerCase().includes(v));
+      } else {
+        s.classList.toggle('hide', !s.textContent.toLowerCase().includes(v));
+      }
+    });
+  });
+
+  // "Все" button — clears search + scrolls top
+  document.getElementById('expandAll').addEventListener('click', () => {
+    q.value = '';
+    q.dispatchEvent(new Event('input'));
+    window.scrollTo({top:0, behavior:'smooth'});
+  });
+</script>
+</body>
+</html>
