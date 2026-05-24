@@ -7,7 +7,6 @@ import ThreeHero from './components/ThreeHero';
 import GeminiChat, { toggleGeminiChat } from './components/GeminiChat';
 import Preloader from './components/Preloader';
 import PromoModal from './components/PromoModal';
-import { PROMO_MODAL_DATA } from './constants/promoData';
 import { CONTACTS } from './constants/contacts';
 
 const FAQItem: React.FC<{ question: string; answer: string; isOpen: boolean; onClick: () => void }> = ({ question, answer, isOpen, onClick }) => {
@@ -40,7 +39,7 @@ const FAQItem: React.FC<{ question: string; answer: string; isOpen: boolean; onC
 };
 
 const App: React.FC = () => {
-  const { tariffs: TARIFFS, news: NEWS_DATA, faq: FAQ } = useLiveContent();
+  const { tariffs: TARIFFS, news: NEWS_DATA, faq: FAQ, promo: PROMO, loaded: liveLoaded } = useLiveContent();
   const [isDark, setIsDark] = useState(true);
   const [scrolled, setScrolled] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -81,19 +80,19 @@ const App: React.FC = () => {
   }, [isLoading]);
 
   useEffect(() => {
-    if (!isLoading) {
-      const PROMO_KEY = 'robornet_promo_shown';
-      const lastShown = localStorage.getItem(PROMO_KEY);
-      const now = Date.now();
-      const oneDayMs = 24 * 60 * 60 * 1000;
-      if (lastShown && now - parseInt(lastShown, 10) < oneDayMs) return;
-      const promoTimer = setTimeout(() => {
-        setShowPromoModal(true);
-        localStorage.setItem(PROMO_KEY, String(Date.now()));
-      }, PROMO_MODAL_DATA.delay);
-      return () => clearTimeout(promoTimer);
-    }
-  }, [isLoading]);
+    if (isLoading || !liveLoaded) return;
+    if (!PROMO.enabled) return;
+    const PROMO_KEY = 'robornet_promo_shown';
+    const lastShown = localStorage.getItem(PROMO_KEY);
+    const now = Date.now();
+    const oneDayMs = 24 * 60 * 60 * 1000;
+    if (lastShown && now - parseInt(lastShown, 10) < oneDayMs) return;
+    const promoTimer = setTimeout(() => {
+      setShowPromoModal(true);
+      localStorage.setItem(PROMO_KEY, String(Date.now()));
+    }, PROMO.delay);
+    return () => clearTimeout(promoTimer);
+  }, [isLoading, liveLoaded, PROMO.enabled, PROMO.delay]);
 
   useEffect(() => {
     if (isLoading) return;
@@ -575,7 +574,7 @@ const App: React.FC = () => {
           </div>
         </footer>
 
-        <PromoModal isOpen={showPromoModal} onClose={() => setShowPromoModal(false)} />
+        <PromoModal isOpen={showPromoModal} onClose={() => setShowPromoModal(false)} config={PROMO} />
 
         {/* Modal for News */}
         {newsModalActive && selectedNews && (

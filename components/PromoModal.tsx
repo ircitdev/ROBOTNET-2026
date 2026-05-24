@@ -1,14 +1,15 @@
 
 import React from 'react';
-import { PROMO_MODAL_DATA } from '../constants/promoData';
+import { PROMO_MODAL_DATA, PromoModalConfig } from '../constants/promoData';
 import { toggleGeminiChat } from './GeminiChat';
 
 interface PromoModalProps {
   isOpen: boolean;
   onClose: () => void;
+  config?: PromoModalConfig;
 }
 
-const PromoModal: React.FC<PromoModalProps> = ({ isOpen, onClose }) => {
+const PromoModal: React.FC<PromoModalProps> = ({ isOpen, onClose, config = PROMO_MODAL_DATA }) => {
   if (!isOpen) return null;
 
   return (
@@ -31,13 +32,13 @@ const PromoModal: React.FC<PromoModalProps> = ({ isOpen, onClose }) => {
         
         <div className="text-center">
           <span className="inline-block px-3 py-1 rounded-full bg-neon-lime/10 text-neon-lime text-[10px] font-bold uppercase tracking-widest mb-4">
-            {PROMO_MODAL_DATA.badge}
+            {config.badge}
           </span>
           <h3 className="text-2xl sm:text-3xl font-heading font-extrabold mb-4 dark:text-white leading-tight">
-            {PROMO_MODAL_DATA.title}
+            {config.title}
           </h3>
           <p className="text-slate-600 dark:text-slate-400 mb-8 sm:mb-10 text-sm sm:text-base leading-relaxed">
-            {PROMO_MODAL_DATA.description}
+            {config.description}
           </p>
         </div>
 
@@ -46,13 +47,13 @@ const PromoModal: React.FC<PromoModalProps> = ({ isOpen, onClose }) => {
             onClick={onClose}
             className="w-full py-4 bg-neon-cyan text-slate-900 rounded-2xl font-heading font-extrabold text-xs uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-neon-cyan"
           >
-            {PROMO_MODAL_DATA.primaryButton}
+            {config.primaryButton}
           </button>
           <button 
             onClick={() => { onClose(); toggleGeminiChat(); }}
             className="w-full py-4 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 rounded-2xl font-heading font-extrabold text-xs uppercase tracking-widest hover:bg-slate-200 dark:hover:bg-slate-700 transition-all"
           >
-            {PROMO_MODAL_DATA.secondaryButton}
+            {config.secondaryButton}
           </button>
         </div>
       </div>
